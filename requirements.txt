@@ -25,3 +25,8 @@ scapy-python3==0.26
 pycurl==7.45.2
 cloudscraper==1.2.71
 scapy==2.5.0
+cloudscraper
+socks
+pysocks
+colorama
+undetected_chromedriver
