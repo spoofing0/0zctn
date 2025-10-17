@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import re, json, os, asyncio, sys, pytz
 from datetime import datetime, timedelta
 from telethon import TelegramClient, events
