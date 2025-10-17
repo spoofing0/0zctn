@@ -164,69 +164,171 @@ async def send_new_signal(game_num, signal_suit, reason, c2_3_info=None):
             trigger_info = f"{c2_3_desc} {c2_3_type}"
         else: trigger_info = "KLASİK #C2_3"
         gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
-        signal_text = f"🎯 **SİNYAL** 🎯\n#N{game_num} - {suit_display}\n📊 Tetikleyici: {trigger_info}\n🎯 Sebep: {reason}\n⚡ Strateji: Martingale {MAX_MARTINGALE_STEPS} Seviye\n🕒 {gmt3_time} (GMT+3)"
+        
+        signal_text = (
+            f"🎯 **SİNYAL BAŞLADI** 🎯\n"
+            f"#N{game_num} - {suit_display}\n"
+            f"📊 Tetikleyici: {trigger_info}\n"
+            f"🎯 Sebep: {reason}\n"
+            f"⚡ Strateji: Martingale {MAX_MARTINGALE_STEPS} Seviye\n"
+            f"🕒 {gmt3_time} (GMT+3)\n"
+            f"🔴 SONUÇ: BEKLENİYOR..."
+        )
+        
         sent_message = await client.send_message(KANAL_HEDEF, signal_text)
         print(f"🚀 Sinyal gönderildi: #N{game_num} - {suit_display} - {trigger_info}")
         daily_signal_count += 1
+        
         martingale_trackers[game_num] = {
-            'message_obj': sent_message, 'step': 0, 'signal_suit': signal_suit, 'sent_game_number': game_num,
-            'expected_game_number_for_check': game_num, 'start_time': datetime.now(GMT3), 'reason': reason,
-            'c2_3_type': c2_3_info.get('c2_3_type', '') if c2_3_info else '#C2_3'
+            'message_obj': sent_message, 
+            'step': 0, 
+            'signal_suit': signal_suit, 
+            'sent_game_number': game_num,
+            'expected_game_number_for_check': game_num, 
+            'start_time': datetime.now(GMT3), 
+            'reason': reason,
+            'c2_3_type': c2_3_info.get('c2_3_type', '') if c2_3_info else '#C2_3',
+            'results': []  # Sonuçları takip etmek için
         }
         is_signal_active = True
-    except Exception as e: print(f"❌ Sinyal gönderme hatası: {e}")
+    except Exception as e: 
+        print(f"❌ Sinyal gönderme hatası: {e}")
 
-async def update_signal_message(tracker_info, result_type, current_step=None):
+async def update_signal_message(tracker_info, result_type, current_step=None, result_details=None):
     """Sinyal mesajını güncelle - TÜRKÇE"""
     try:
         signal_game_num, signal_suit = tracker_info['sent_game_number'], tracker_info['signal_suit']
         suit_display, message_obj, reason = get_suit_display_name(signal_suit), tracker_info['message_obj'], tracker_info.get('reason', '')
         duration = datetime.now(GMT3) - tracker_info['start_time']
-        duration_str = f"{duration.seconds // 60}:{duration.seconds % 60:02d}"
+        duration_str = f"{duration.seconds // 60}d {duration.seconds % 60}s"
+        gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
+        
+        # Sonuç geçmişini güncelle
+        if result_details:
+            tracker_info['results'].append(result_details)
+        
         if result_type == 'win':
-            new_text = f"✅ **KAZANÇ** ✅\n#N{signal_game_num} - {suit_display}\n📊 Sebep: {reason}\n🎯 Seviye: {current_step if current_step else 0}. Seviye\n⏱️ {duration_str}\n🏆 KAZANÇ"
+            new_text = (
+                f"✅ **KAZANÇ** ✅\n"
+                f"#N{signal_game_num} - {suit_display}\n"
+                f"📊 Sebep: {reason}\n"
+                f"🎯 Seviye: {current_step if current_step else 0}. Seviye\n"
+                f"⏱️ Süre: {duration_str}\n"
+                f"🕒 Bitiş: {gmt3_time}\n"
+                f"🏆 **SONUÇ: KAZANDINIZ!**"
+            )
         elif result_type == 'loss':
-            new_text = f"❌ **KAYIP** ❌\n#N{signal_game_num} - {suit_display}\n📊 Sebep: {reason}\n⚡ Martingale {MAX_MARTINGALE_STEPS} Seviye\n⏱️ {duration_str}\n💔 KAYIP"
+            new_text = (
+                f"❌ **KAYIP** ❌\n"
+                f"#N{signal_game_num} - {suit_display}\n"
+                f"📊 Sebep: {reason}\n"
+                f"🎯 Seviye: {current_step if current_step else MAX_MARTINGALE_STEPS}. Seviye\n"
+                f"⏱️ Süre: {duration_str}\n"
+                f"🕒 Bitiş: {gmt3_time}\n"
+                f"💔 **SONUÇ: KAYBETTİNİZ**"
+            )
         elif result_type == 'progress':
-            new_text = f"📈 **DEVAM EDİYOR** 📈\n#N{signal_game_num} - {suit_display}\n📊 Sebep: {reason}\n🎯 Seviye: {current_step}. Seviye\n⏳ Sonraki: #N{tracker_info['expected_game_number_for_check']}\n🔄 Devam Ediyor"
+            # Martingale ilerleme durumu
+            step_details = f"{current_step}. seviye → #{tracker_info['expected_game_number_for_check']}"
+            results_history = "\n".join([f"• {r}" for r in tracker_info['results']]) if tracker_info['results'] else "• İlk deneme"
+            
+            new_text = (
+                f"🔄 **MARTINGALE İLERLİYOR** 🔄\n"
+                f"#N{signal_game_num} - {suit_display}\n"
+                f"📊 Sebep: {reason}\n"
+                f"🎯 Adım: {step_details}\n"
+                f"⏱️ Süre: {duration_str}\n"
+                f"🕒 Son Güncelleme: {gmt3_time}\n"
+                f"📈 Geçmiş:\n{results_history}\n"
+                f"🎲 **SONRAKİ: #{tracker_info['expected_game_number_for_check']}**"
+            )
+        elif result_type == 'step_result':
+            # Her adımın sonucu
+            new_text = (
+                f"📊 **ADIM SONUCU** 📊\n"
+                f"#N{signal_game_num} - {suit_display}\n"
+                f"🎯 Adım: {current_step}. seviye\n"
+                f"📋 Sonuç: {result_details}\n"
+                f"⏱️ Süre: {duration_str}\n"
+                f"🕒 Zaman: {gmt3_time}\n"
+                f"🔄 **DEVAM EDİYOR...**"
+            )
+        
         await message_obj.edit(new_text)
         print(f"✏️ Sinyal güncellendi: #{signal_game_num} - {result_type}")
-    except MessageNotModifiedError: pass
-    except Exception as e: print(f"❌ Mesaj düzenleme hatası: {e}")
+        
+    except MessageNotModifiedError: 
+        pass
+    except Exception as e: 
+        print(f"❌ Mesaj düzenleme hatası: {e}")
 
 async def check_martingale_trackers():
-    """Martingale takibi"""
+    """Martingale takibi - Geliştirilmiş versiyon"""
     global martingale_trackers, is_signal_active
     trackers_to_remove = []
+    
     for signal_game_num, tracker_info in list(martingale_trackers.items()):
         current_step, signal_suit, game_to_check = tracker_info['step'], tracker_info['signal_suit'], tracker_info['expected_game_number_for_check']
-        if game_to_check not in game_results: continue
+        
+        if game_to_check not in game_results:
+            continue
+        
         result_info = game_results.get(game_to_check)
-        if not result_info['is_final']: continue
-        player_cards_str, signal_won_this_step = result_info['player_cards'], bool(re.search(re.escape(signal_suit), player_cards_str))
-        print(f"🔍 Sinyal kontrol: #{signal_game_num} (Seviye {current_step})")
+        if not result_info['is_final']:
+            continue
+        
+        player_cards_str = result_info['player_cards']
+        signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
+        
+        print(f"🔍 Sinyal kontrol: #{signal_game_num} (Seviye {current_step}) → #{game_to_check}")
+        
         if signal_won_this_step:
+            # KAZANÇ DURUMU
+            result_details = f"#{game_to_check} ✅ Kazanç - {current_step}. seviye"
+            await update_signal_message(tracker_info, 'step_result', current_step, result_details)
+            await asyncio.sleep(1)  # Mesajın görünmesi için kısa bekleme
+            
             await update_signal_message(tracker_info, 'win', current_step)
             trackers_to_remove.append(signal_game_num)
             is_signal_active = False
+            
             recent_games.append({'kazanç': True, 'adim': current_step})
             if len(recent_games) > 20: recent_games.pop(0)
-            print(f"🎉 Sinyal #{signal_game_num} KAZANDI!")
+            
+            print(f"🎉 Sinyal #{signal_game_num} KAZANDI! Seviye: {current_step}")
+            
         else:
+            # KAYIP DURUMU
+            result_details = f"#{game_to_check} ❌ Kayıp - {current_step}. seviye"
+            await update_signal_message(tracker_info, 'step_result', current_step, result_details)
+            await asyncio.sleep(1)  # Mesajın görünmesi için kısa bekleme
+            
             if current_step < MAX_MARTINGALE_STEPS:
-                next_step, next_game_num = current_step + 1, get_next_game_number(game_to_check)
-                martingale_trackers[signal_game_num]['step'], martingale_trackers[signal_game_num]['expected_game_number_for_check'] = next_step, next_game_num
+                # MARTINGALE İLERLİYOR
+                next_step = current_step + 1
+                next_game_num = get_next_game_number(game_to_check)
+                
+                martingale_trackers[signal_game_num]['step'] = next_step
+                martingale_trackers[signal_game_num]['expected_game_number_for_check'] = next_game_num
+                
                 await update_signal_message(tracker_info, 'progress', next_step)
-                print(f"📈 Sinyal #{signal_game_num} → {next_step}. seviye")
+                print(f"📈 Sinyal #{signal_game_num} → {next_step}. seviye → #{next_game_num}")
+                
             else:
-                await update_signal_message(tracker_info, 'loss')
+                # MAX MARTINGALE SEVİYESİNE ULAŞILDI - KAYIP
+                await update_signal_message(tracker_info, 'loss', current_step)
                 trackers_to_remove.append(signal_game_num)
                 is_signal_active = False
+                
                 recent_games.append({'kazanç': False, 'adim': current_step})
                 if len(recent_games) > 20: recent_games.pop(0)
-                print(f"💔 Sinyal #{signal_game_num} KAYBETTİ!")
+                
+                print(f"💔 Sinyal #{signal_game_num} KAYBETTİ! Son seviye: {current_step}")
+    
+    # Tamamlanan trackers'ı temizle
     for game_num_to_remove in trackers_to_remove:
-        if game_num_to_remove in martingale_trackers: del martingale_trackers[game_num_to_remove]
+        if game_num_to_remove in martingale_trackers:
+            del martingale_trackers[game_num_to_remove]
 
 def extract_game_info_from_message(text):
     """Oyun bilgilerini çıkar - Tüm C2_3 tipleri için TÜRKÇE"""
@@ -305,59 +407,15 @@ async def handle_start(event): await event.reply("🤖 Royal Baccarat Bot Aktif!
 async def handle_durum(event):
     aktif_sinyal = "✅ Evet" if is_signal_active else "❌ Hayır"
     gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
-    durum_mesaji = f"🤖 **ROYAL BACCARAT BOT** 🤖\n\n🟢 **Durum:** Çalışıyor\n🎯 **Aktif Sinyal:** {aktif_sinyal}\n📊 **Takip:** {len(martingale_trackers)} sinyal\n📈 **Trend:** {color_trend[-5:] if color_trend else 'Yok'}\n🎛️ **Mod:** {SISTEM_MODU}\n🕒 **Saat:** {gmt3_time} (GMT+3)\n📨 **Günlük Sinyal:** {daily_signal_count} (Sınırsız)\n\n⚡ **Sistem:** Hibrit Pattern + Martingale 3 Seviye"
-    await event.reply(durum_mesaji)
-
-@client.on(events.NewMessage(pattern='(?i)/mod_normal'))
-async def handle_mod_normal(event):
-    global SISTEM_MODU
-    SISTEM_MODU = "normal_hibrit"
-    await event.reply("✅ NORMAL HİBRİT modu aktif! Daha çok sinyal, normal risk.")
-
-@client.on(events.NewMessage(pattern='(?i)/mod_super'))
-async def handle_mod_super(event):
-    global SISTEM_MODU
-    SISTEM_MODU = "super_hibrit"
-    await event.reply("🚀 SÜPER HİBRİT modu aktif! Daha az sinyal, yüksek güvenlik.")
-
-@client.on(events.NewMessage(pattern='(?i)/mod_durum'))
-async def handle_mod_status(event): await event.reply(f"🎛️ Aktif Mod: {SISTEM_MODU}")
-
-@client.on(events.NewMessage(pattern='(?i)/temizle'))
-async def handle_temizle(event):
-    if event.sender_id != ADMIN_ID: return await event.reply("❌ Yetkiniz yok!")
-    global color_trend, recent_games, daily_signal_count
-    color_trend, recent_games, daily_signal_count = [], [], 0
-    await event.reply("✅ Trend verileri temizlendi! Sinyal sayacı sıfırlandı.")
-
-@client.on(events.NewMessage(pattern='(?i)/acil_durdur'))
-async def handle_emergency_stop(event):
-    global is_signal_active
-    if event.sender_id != ADMIN_ID: return await event.reply("❌ Yetkiniz yok!")
-    is_signal_active = False
-    martingale_trackers.clear()
-    await event.reply("🚨 **ACİL DURDURMA** 🚨\n✅ Tüm sinyaller durduruldu\n✅ Takipçiler temizlendi\n✅ Sistem duraklatıldı\nDevam etmek için /aktif_et komutunu kullan")
-
-@client.on(events.NewMessage(pattern='(?i)/aktif_et'))
-async def handle_activate(event):
-    global is_signal_active
-    if event.sender_id != ADMIN_ID: return await event.reply("❌ Yetkiniz yok!")
-    is_signal_active = False
-    await event.reply(f"✅ **SİSTEM AKTİF** ✅\n🟢 Yeni sinyaller için hazır\n🎛️ Mod: {SISTEM_MODU}\n📊 Bugün: {daily_signal_count} sinyal")
-
-# ==============================================================================
-# BOT BAŞLATMA
-# ==============================================================================
-if __name__ == '__main__':
-    print("🤖 ROYAL BACCARAT BOT BAŞLIYOR...")
-    print(f"🔧 API_ID: {API_ID}")
-    print(f"🎯 Kaynak Kanal: {KANAL_KAYNAK_ID}")
-    print(f"📤 Hedef Kanal: {KANAL_HEDEF}")
-    print(f"👤 Admin ID: {ADMIN_ID}")
-    print(f"🎛️ Varsayılan Mod: {SISTEM_MODU}")
-    print(f"🕒 Saat Dilimi: GMT+3")
-    print("⏳ Bağlanıyor...")
-    try:
-        with client: client.run_until_disconnected()
-    except KeyboardInterrupt: print("\n👋 Bot durduruluyor...")
-    except Exception as e: print(f"❌ Bot başlangıç hatası: {e}")
+    
+    aktif_takipciler = "\n".join([f"• #{num} (Seviye {info['step']})" for num, info in martingale_trackers.items()])
+    if not aktif_takipciler:
+        aktif_takipciler = "• Aktif sinyal yok"
+    
+    durum_mesaji = (
+        f"🤖 **ROYAL BACCARAT BOT** 🤖\n\n"
+        f"🟢 **Durum:** Çalışıyor\n"
+        f"🎯 **Aktif Sinyal:** {aktif_sinyal}\n"
+        f"📊 **Aktif Takipçiler:**\n{aktif_takipciler}\n"
+        f"📈 **Trend:** {color_trend[-5:] if color_trend else 'Yok'}\n"
+ 
