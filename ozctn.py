@@ -418,4 +418,10 @@ async def handle_durum(event):
         f"🎯 **Aktif Sinyal:** {aktif_sinyal}\n"
         f"📊 **Aktif Takipçiler:**\n{aktif_takipciler}\n"
         f"📈 **Trend:** {color_trend[-5:] if color_trend else 'Yok'}\n"
- 
+        f"🎛️ **Mod:** {SISTEM_MODU}\n"
+        f"🕒 **Saat:** {gmt3_time} (GMT+3)\n"
+        f"📨 **Günlük Sinyal:** {daily_signal_count} (Sınırsız)\n\n"
+        f"⚡ **Sistem:** Hibrit Pattern + Martingale 3 Seviye"
+    )
+    
+    await event.reply(durum_mesaji)
