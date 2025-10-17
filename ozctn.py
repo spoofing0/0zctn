@@ -234,7 +234,8 @@ async def super_hibrit_sistemi(game_info):
 @client.on(events.MessageEdited(chats=KANAL_KAYNAK_ID))
 async def handle_source_channel_message(event):
     try:
-        message, text = event.message, message.text or ""
+        message = event.message
+        text = message.text or ""
         cleaned_text = re.sub(r'\*\*', '', text).strip()
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
         gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
