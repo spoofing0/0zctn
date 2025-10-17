@@ -48,7 +48,7 @@ recent_games = []
 
 def get_suit_display_name(suit_symbol):
     """Renk görüntüleme adı (Türkçe)"""
-    suit_names = {'♠': '♠️ SPADES', '♥': '❤️ HEARTS', '♦': '♦️ DİAMONDS', '♣': '♣️ CLUBS'}
+    suit_names = {'♠': '♠️ MAÇA', '♥': '❤️ KALP', '♦': '♦️ KARO', '♣': '♣️ SİNEK'}
     return suit_names.get(suit_symbol, f"❓ {suit_symbol}")
 
 # Tüm C2_3 tipleri
@@ -276,7 +276,8 @@ async def super_hibrit_sistemi(game_info):
 async def handle_source_channel_message(event):
     """Kaynak kanal mesajlarını işle - TÜRKÇE"""
     try:
-        message, text = event.message, message.text or ""
+        message = event.message
+        text = message.text or ""
         cleaned_text = re.sub(r'\*\*', '', text).strip()
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
         gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
@@ -333,7 +334,8 @@ async def handle_temizle(event):
 async def handle_emergency_stop(event):
     global is_signal_active
     if event.sender_id != ADMIN_ID: return await event.reply("❌ Yetkiniz yok!")
-    is_signal_active, martingale_trackers.clear() = False, {}
+    is_signal_active = False
+    martingale_trackers.clear()
     await event.reply("🚨 **ACİL DURDURMA** 🚨\n✅ Tüm sinyaller durduruldu\n✅ Takipçiler temizlendi\n✅ Sistem duraklatıldı\nDevam etmek için /aktif_et komutunu kullan")
 
 @client.on(events.NewMessage(pattern='(?i)/aktif_et'))
