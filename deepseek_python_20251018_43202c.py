@@ -7,7 +7,7 @@ from collections import defaultdict, deque
 
 API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
-BOT_TOKEN = ''
+BOT_TOKEN = '+905305281971'
 KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@royalbaccfree"
 ADMIN_ID = 1136442929
