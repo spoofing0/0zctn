@@ -479,7 +479,7 @@ async def quantum_hibrit_sistemi(game_info):
     pattern_cesitlilik = len(set([sebep for _, sebep, _, _ in pattern_sonuclari])) >= 2
     filtre_sonuclari.append(pattern_cesitlilik)
     
-    agirlik_uygun = toplam_agirlik >= 2.0
+    agirlik_uygun = toplam_agirlik >= 2.5
     filtre_sonuclari.append(agirlik_uygun)
     
     filtre_gecen = sum(filtre_sonuclari)
