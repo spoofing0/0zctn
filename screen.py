@@ -7,13 +7,13 @@ from collections import defaultdict, deque
 
 API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
-BOT_TOKEN = '7754085980:AAG75MV6xtipXJP-aycQ_yor5Ca56CUC9hw'
+BOT_TOKEN = ''
 KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@royalbaccfree"
 ADMIN_ID = 1136442929
 SISTEM_MODU = "normal_hibrit_ultra"
 GMT3 = pytz.timezone('Europe/Istanbul')
-client = TelegramClient('royal_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+client = TelegramClient('screen_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 game_results, martingale_trackers, color_trend, recent_games = {}, {}, [], []
 MAX_MARTINGALE_STEPS, MAX_GAME_NUMBER, is_signal_active, daily_signal_count = 2, 1440, False, 0
