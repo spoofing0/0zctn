@@ -70,11 +70,15 @@ def extract_largest_value_suit(cards_str):
         if not cards: return None
         max_value, largest_value_suit = -1, None
         values = [get_baccarat_value(card[0]) for card in cards]
-        if len(values) == 2 and values[0] == values[1]: return None
+        # Eğer tüm değerler 0 ise bile bir renk döndür (ilk kartın rengi)
         for card_char, suit in cards:
             value = get_baccarat_value(card_char)
-            if value > max_value: max_value, largest_value_suit = value, suit
-        return largest_value_suit if max_value > 0 else None
+            if value > max_value: 
+                max_value, largest_value_suit = value, suit
+        # Eğer max_value 0 veya daha düşükse, yine de ilk kartın rengini döndür
+        if max_value <= 0:
+            largest_value_suit = cards[0][1]  # ilk kartın rengi
+        return largest_value_suit
     except Exception as e:
         print(f"❌ extract_largest_value_suit hatası: {e}")
         return None
@@ -123,12 +127,14 @@ def check_high_total_and_three_cards(player_cards, banker_cards):
             signal_color = extract_largest_value_suit(player_cards)
             if signal_color:
                 results.append((signal_color, f"🔥 10.5+ ÇİFT YÜKSEK (P:{player_toplam} B:{banker_toplam})"))
+                print(f"✅ 10.5+ sinyali: {signal_color} - Oyuncu:{player_toplam}, Banker:{banker_toplam}")
 
         # Oyuncu 3 kart açmış mı? (DÜZELTME: sadece 3 kart kontrolü)
         if len(player_kartlar) == 3:
             signal_color = extract_largest_value_suit(player_cards)
             if signal_color:
                 results.append((signal_color, f"🎯 3 KARTLI OYUNCU (P:{player_toplam})"))
+                print(f"✅ 3 kart sinyali: {signal_color} - Oyuncu toplam:{player_toplam}")
 
         return results
 
@@ -493,18 +499,11 @@ async def check_martingale_trackers():
         if not result_info['is_final']: continue
         player_cards_str = result_info['player_cards']
         
-        # Özel durumlar için kazanç kontrolü
-        if "10.5+" in tracker_info['reason']:
-            # 10.5+ sinyali için her zaman kazanç say (test amaçlı)
-            signal_won_this_step = True
-        elif "3 KART" in tracker_info['reason']:
-            # 3 kart sinyali için her zaman kazanç say (test amaçlı)
-            signal_won_this_step = True
-        else:
-            # Normal renk sinyali için renk kontrolü
-            signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
+        # TÜM sinyaller için normal renk kontrolü yap
+        signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
         
-        print(f"🔍 Sinyal kontrol: #{signal_game_num} (Seviye {current_step}) → #{game_to_check}")
+        print(f"🔍 Sinyal kontrol: #{signal_game_num} (Seviye {current_step}) → #{game_to_check} - Renk: {signal_suit} - Kazanç: {signal_won_this_step}")
+        
         if signal_won_this_step:
             result_details = f"#{game_to_check} ✅ Kazanç - {current_step}. seviye"
             await update_signal_message(tracker_info, 'step_result', current_step, result_details)
