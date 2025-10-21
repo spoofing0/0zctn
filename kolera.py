@@ -105,7 +105,7 @@ def analyze_simple_pattern(player_cards, banker_cards, game_number):
 
 def check_high_total_and_three_cards(player_cards, banker_cards):
     """
-    ACİL DÜZELTME: 10.5+ sinyali için doğru mod10 hesaplaması
+    ACİL DÜZELTME: 10.5+ sinyali için DOĞRU mod10 hesaplaması
     """
     try:
         player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards)
@@ -537,7 +537,12 @@ async def check_martingale_trackers():
             
             # DOĞRU KOŞUL: Sadece mod10 toplamı 11+ ise kazanç
             signal_won_this_step = toplam_mod10 >= 11
-            print(f"🎯 10.5+ sinyali kontrolü: Toplam:{toplam_mod10} (P:{player_mod10}+B:{banker_mod10}) - Kazanç: {signal_won_this_step}")
+            
+            # DETAYLI DEBUG
+            print(f"🎯 10.5+ DEBUG - Kartlar: P{player_cards_str} B{banker_cards_str}")
+            print(f"🎯 10.5+ DEBUG - Değerler: P{player_degerler}={sum(player_degerler)} B{banker_degerler}={sum(banker_degerler)}")
+            print(f"🎯 10.5+ DEBUG - Mod10: P{player_mod10} + B{banker_mod10} = {toplam_mod10}")
+            print(f"🎯 10.5+ sinyali kontrolü: Toplam:{toplam_mod10} - Kazanç: {signal_won_this_step}")
             
         else:
             # Normal renk sinyali için renk kontrolü
