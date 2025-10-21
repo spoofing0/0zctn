@@ -513,12 +513,30 @@ async def check_martingale_trackers():
         player_cards_str = result_info['player_cards']
         print(f"✅ Oyun #{game_to_check} sonuçlandı: {player_cards_str}")
         
-        # ÖZEL SINYALLER İÇİN KAZANÇ KONTROLÜ
+        # ÖZEL SINYALLER İÇİN KAZANÇ KONTROLÜ - GÜNCELLENDİ
         reason = tracker_info['reason']
-        if "10.5+" in reason or "3 KART" in reason:
-            # 10.5+ ve 3 kart sinyalleri için HER ZAMAN KAZANÇ
-            signal_won_this_step = True
-            print(f"🎯 Özel sinyal - Otomatik kazanç: {reason}")
+        
+        # 3 KART sinyali için özel kontrol
+        if "3 KART" in reason:
+            # Oyuncunun gerçekten 3 kart açıp açmadığını kontrol et
+            player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards_str)
+            signal_won_this_step = len(player_kartlar) == 3
+            print(f"🎯 3 kart sinyali kontrolü: {len(player_kartlar)} kart - Kazanç: {signal_won_this_step}")
+            
+        # 10.5+ sinyali için özel kontrol
+        elif "10.5+" in reason:
+            player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards_str)
+            banker_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', result_info['banker_cards'])
+            
+            player_degerler = [get_baccarat_value(kart[0]) for kart in player_kartlar]
+            banker_degerler = [get_baccarat_value(kart[0]) for kart in banker_kartlar]
+            
+            player_toplam = sum(player_degerler)
+            banker_toplam = sum(banker_degerler)
+            
+            signal_won_this_step = player_toplam >= 11 and banker_toplam >= 11
+            print(f"🎯 10.5+ sinyali kontrolü: P:{player_toplam} B:{banker_toplam} - Kazanç: {signal_won_this_step}")
+            
         else:
             # Normal renk sinyali için renk kontrolü
             signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
