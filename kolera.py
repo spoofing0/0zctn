@@ -514,7 +514,12 @@ async def check_martingale_trackers():
         banker_cards_str = result_info['banker_cards']
         player_result = result_info.get('player_result')
         banker_result = result_info.get('banker_result')
-        print(f"✅ Oyun #{game_to_check} sonuçlandı: P:{player_result} ({player_cards_str}) B:{banker_result} ({banker_cards_str})")
+        
+        # DETAYLI DEBUG - TÜM BİLGİLERİ GÖSTER
+        print(f"✅ Oyun #{game_to_check} SONUÇ BİLGİLERİ:")
+        print(f"   - Oyuncu: {player_result} ({player_cards_str})")
+        print(f"   - Banker: {banker_result} ({banker_cards_str})")
+        print(f"   - Toplam: {player_result + banker_result if player_result is not None and banker_result is not None else 'HESAPLANAMADI'}")
         
         reason = tracker_info['reason']
         
@@ -524,7 +529,7 @@ async def check_martingale_trackers():
             signal_won_this_step = len(player_kartlar) == 3
             print(f"🎯 3 kart sinyali kontrolü: {len(player_kartlar)} kart - Kazanç: {signal_won_this_step}")
             
-        # 10.5+ sinyali için özel kontrol - GÜNCELLENDİ: sonuç değerlerini kullan
+        # 10.5+ sinyali için özel kontrol
         elif "10.5+" in reason:
             if player_result is not None and banker_result is not None:
                 toplam_sonuc = player_result + banker_result
@@ -533,6 +538,10 @@ async def check_martingale_trackers():
                 # DETAYLI DEBUG
                 print(f"🎯 10.5+ DEBUG - Sonuçlar: P{player_result} + B{banker_result} = {toplam_sonuc}")
                 print(f"🎯 10.5+ sinyali kontrolü: Toplam:{toplam_sonuc} - Kazanç: {signal_won_this_step}")
+                
+                # Eğer kazanç bekleniyorsa ama sistem kayıp gösteriyorsa
+                if toplam_sonuc >= 11 and not signal_won_this_step:
+                    print(f"🚨 HATA: Toplam {toplam_sonuc} >= 11 olmasına rağmen kazanç False!")
             else:
                 signal_won_this_step = False
                 print(f"❌ 10.5+ DEBUG - Sonuç değerleri eksik: P{player_result} B{banker_result}")
@@ -586,15 +595,16 @@ def extract_game_info_from_message(text):
             game_info['game_number'] = int(game_match.group(1))
             print(f"✅ Oyun numarası: #{game_info['game_number']}")
         
-        # Oyuncu sonucu ve kartları: örnek: "1 (10♦️2♥️9♦️)"
+        # Oyuncu sonucu ve kartları: örnek: "6 (4♦️A♣️A♠️)"
         player_match = re.search(r'(\d+)\s+\((.*?)\)', text)
         if player_match: 
             game_info['player_result'] = int(player_match.group(1))
             game_info['player_cards'] = player_match.group(2)
             print(f"✅ Oyuncu sonucu: {game_info['player_result']}, kartları: {game_info['player_cards']}")
         
-        # Banker sonucu ve kartları: örnek: "✅7 (3♣️4♦️)" - ✅ veya ❌ olabilir
-        banker_match = re.search(r'[✅❌](\d+)\s+\((.*?)\)', text)
+        # Banker sonucu ve kartları: örnek: "🔰6 (K♣️6♦️)" - ✅, ❌, 🔰 olabilir
+        # Güncellenmiş regex: herhangi bir emoji ve ardından sayı
+        banker_match = re.search(r'[✅❌🔰](\d+)\s+\((.*?)\)', text)
         if banker_match: 
             game_info['banker_result'] = int(banker_match.group(1))
             game_info['banker_cards'] = banker_match.group(2)
@@ -610,6 +620,10 @@ def extract_game_info_from_message(text):
             game_info['is_final'] = True
             print(f"✅ Final sonuç: Evet")
         
+        return game_info
+        
+    except Exception as e: 
+        print(f"❌ Oyun bilgisi çıkarma hatası: {e}")
         return game_info
         
     except Exception as e: 
