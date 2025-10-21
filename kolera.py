@@ -13,19 +13,10 @@ KANAL_HEDEF = "@royalbaccfree"  # 📢 Hedef kanal
 ADMIN_ID = 1136442929  # 👑 Admin ID
 SISTEM_MODU = "normal_hibrit"
 GMT3 = pytz.timezone('Europe/Istanbul')
-client = TelegramClient('/root/0zctn/sagopa_bot.session', API_ID, API_HASH)
+client = TelegramClient('kolera_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 game_results, martingale_trackers, color_trend, recent_games = {}, {}, [], []
 MAX_MARTINGALE_STEPS, MAX_GAME_NUMBER, is_signal_active, daily_signal_count = 3, 1440, False, 0
-
-# 5.5 Alt/Üst tahmin sistemi için yeni değişkenler
-alt_ust_stats = {
-    'alt': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0},
-    'ust': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0}
-}
-
-alt_ust_trend = []
-ALT_UST_MARTINGALE_STEPS = 3
 
 # Güncellenmiş C2_3 istatistik yapısı
 C2_3_TYPES = {
@@ -58,7 +49,9 @@ pattern_stats = {
     '📈 STANDART SİNYAL': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0, 'avg_steps': 0},
     '✅ 5-Lİ ONAY': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0, 'avg_steps': 0},
     '🚀 SÜPER HİBRİT': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0, 'avg_steps': 0},
-    '🎯 KLASİK #C2_3': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0, 'avg_steps': 0}
+    '🎯 KLASİK #C2_3': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0, 'avg_steps': 0},
+    '🔥 10.5+ ÇİFT YÜKSEK': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0, 'avg_steps': 0},
+    '🎯 3 KARTLI OYUNCU': {'total': 0, 'wins': 0, 'losses': 0, 'profit': 0, 'avg_steps': 0}
 }
 
 def get_suit_display_name(suit_symbol):
@@ -86,249 +79,6 @@ def extract_largest_value_suit(cards_str):
         print(f"❌ extract_largest_value_suit hatası: {e}")
         return None
 
-# 5.5 Alt/Üst tahmin fonksiyonu
-def predict_alt_ust(player_cards, banker_cards):
-    try:
-        # Kart değerlerini hesapla
-        player_card_data = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards)
-        banker_card_data = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', banker_cards)
-        
-        player_values = [get_baccarat_value(card[0]) for card in player_card_data]
-        banker_values = [get_baccarat_value(card[0]) for card in banker_card_data]
-        
-        # Toplam değeri hesapla
-        total_value = sum(player_values) + sum(banker_values)
-        
-        # 5.5 tahmini
-        if total_value <= 5:
-            return "alt", total_value
-        else:
-            return "ust", total_value
-            
-    except Exception as e:
-        print(f"❌ Alt/Üst tahmin hatası: {e}")
-        return None, 0
-
-# 5.5 Alt/Üst pattern analizi
-def analyze_alt_ust_pattern(player_cards, banker_cards, game_number):
-    try:
-        tahmin, deger = predict_alt_ust(player_cards, banker_cards)
-        if not tahmin:
-            return None, "Hesaplama hatası"
-        
-        alt_ust_trend.append(tahmin)
-        if len(alt_ust_trend) > 10:
-            alt_ust_trend.pop(0)
-        
-        # Pattern analizleri
-        player_card_data = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards)
-        banker_card_data = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', banker_cards)
-        
-        total_cards = len(player_card_data) + len(banker_card_data)
-        total_value = sum([get_baccarat_value(card[0]) for card in player_card_data]) + \
-                     sum([get_baccarat_value(card[0]) for card in banker_card_data])
-        
-        if total_cards >= 5:
-            return tahmin, "📊 5+ KART - ALT/ÜST"
-        elif total_value <= 3:
-            return "alt", "🎯 DÜŞÜK DEĞER - ALT"
-        elif total_value >= 8:
-            return "ust", "🚀 YÜKSEK DEĞER - ÜST"
-        elif len(alt_ust_trend) >= 3 and alt_ust_trend[-3:] == [tahmin] * 3:
-            return tahmin, "🔄 3x TEKRAR - ALT/ÜST"
-        else:
-            return tahmin, "📈 STANDART - ALT/ÜST"
-            
-    except Exception as e:
-        print(f"❌ Alt/Üst pattern analiz hatası: {e}")
-        return None, f"Hata: {e}"
-
-# 5.5 Alt/Üst hibrit sistem
-async def alt_ust_hibrit_sistemi(game_info):
-    print("🎯 5.5 ALT/ÜST analiz başlıyor...")
-    
-    tahmin, sebep = analyze_alt_ust_pattern(game_info['player_cards'], 
-                                          game_info['banker_cards'], 
-                                          game_info['game_number'])
-    
-    if not tahmin:
-        print(f"🚫 Alt/Üst: Tahmin yapılamadı - {sebep}")
-        return
-    
-    # Risk analizi
-    risk_seviye, risk_uyarilar = super_risk_analizi()
-    if risk_seviye == "🔴 YÜKSEK RİSK":
-        print(f"🚫 Alt/Üst: Yüksek risk - {risk_uyarilar}")
-        return
-    
-    # Trend kontrolü
-    if len(alt_ust_trend) >= 5:
-        son_5 = alt_ust_trend[-5:]
-        if son_5.count(tahmin) >= 4:
-            print("🎯 Alt/Üst: Trend destekliyor")
-    
-    next_game_num = get_next_game_number(game_info['game_number'])
-    await send_alt_ust_signal(next_game_num, tahmin, sebep, game_info)
-
-# 5.5 Alt/Üst sinyal gönderme - ÇAKIŞMA ENGELLİ KALDIRILDI
-async def send_alt_ust_signal(game_num, tahmin, reason, game_info=None):
-    global is_signal_active, daily_signal_count
-        
-    try:
-        tahmin_emoji = "⬇️ ALT" if tahmin == "alt" else "⬆️ ÜST"
-        tahmin_text = "5.5 ALT" if tahmin == "alt" else "5.5 ÜST"
-        
-        gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
-        
-        signal_text = f"🎯 **5.5 ALT/ÜST SİNYALİ** 🎯\n#N{game_num} - {tahmin_emoji}\n📊 Sebep: {reason}\n⚡ Strateji: Martingale {ALT_UST_MARTINGALE_STEPS} Seviye\n🕒 {gmt3_time} (GMT+3)\n🔴 SONUÇ: BEKLENİYOR..."
-        
-        sent_message = await client.send_message(KANAL_HEDEF, signal_text)
-        print(f"🚀 5.5 Alt/Üst sinyal gönderildi: #N{game_num} - {tahmin_text}")
-        
-        # Takipçiye ekle - benzersiz key için game_num + "alt_ust" ekliyoruz
-        tracker_key = f"{game_num}_alt_ust"
-        martingale_trackers[tracker_key] = {
-            'message_obj': sent_message, 
-            'step': 0, 
-            'signal_type': 'alt_ust',
-            'signal_tahmin': tahmin,
-            'sent_game_number': game_num, 
-            'expected_game_number_for_check': game_num, 
-            'start_time': datetime.now(GMT3), 
-            'reason': reason,
-            'results': []
-        }
-        
-        is_signal_active = True
-        daily_signal_count += 1
-        
-    except Exception as e: 
-        print(f"❌ 5.5 Alt/Üst sinyal gönderme hatası: {e}")
-
-# 5.5 Alt/Üst kontrol fonksiyonu
-async def check_alt_ust_tracker(tracker_info):
-    current_step = tracker_info['step']
-    game_to_check = tracker_info['expected_game_number_for_check']
-    tahmin = tracker_info['signal_tahmin']
-    
-    if game_to_check not in game_results:
-        return False
-    
-    result_info = game_results[game_to_check]
-    if not result_info['is_final']:
-        return False
-    
-    # Gerçek değeri hesapla
-    gercek_tahmin, gercek_deger = predict_alt_ust(result_info['player_cards'], 
-                                                 result_info['banker_cards'])
-    
-    kazandi = (gercek_tahmin == tahmin)
-    
-    print(f"🔍 5.5 Alt/Üst kontrol: #{tracker_info['sent_game_number']} → #{game_to_check} | Tahmin: {tahmin} | Gerçek: {gercek_tahmin} | Değer: {gercek_deger} | Kazandı: {kazandi}")
-    
-    if kazandi:
-        result_details = f"#{game_to_check} ✅ Kazanç - {current_step}. seviye | Değer: {gercek_deger}"
-        await update_alt_ust_message(tracker_info, 'step_result', current_step, result_details)
-        await asyncio.sleep(1)
-        await update_alt_ust_message(tracker_info, 'win', current_step)
-        
-        # İstatistik güncelle
-        update_alt_ust_stats(tahmin, 'win', current_step)
-        
-        print(f"🎉 5.5 Alt/Üst #{tracker_info['sent_game_number']} KAZANDI! Seviye: {current_step}")
-        return True
-    else:
-        result_details = f"#{game_to_check} ❌ Kayıp - {current_step}. seviye | Değer: {gercek_deger}"
-        await update_alt_ust_message(tracker_info, 'step_result', current_step, result_details)
-        await asyncio.sleep(1)
-        
-        if current_step < ALT_UST_MARTINGALE_STEPS:
-            next_step = current_step + 1
-            next_game_num = get_next_game_number(game_to_check)
-            
-            tracker_info['step'] = next_step
-            tracker_info['expected_game_number_for_check'] = next_game_num
-            
-            await update_alt_ust_message(tracker_info, 'progress', next_step)
-            print(f"📈 5.5 Alt/Üst #{tracker_info['sent_game_number']} → {next_step}. seviye → #{next_game_num}")
-            return False
-        else:
-            await update_alt_ust_message(tracker_info, 'loss', current_step)
-            
-            # İstatistik güncelle
-            update_alt_ust_stats(tahmin, 'loss', current_step)
-            
-            print(f"💔 5.5 Alt/Üst #{tracker_info['sent_game_number']} KAYBETTİ! Son seviye: {current_step}")
-            return True
-
-# 5.5 Alt/Üst mesaj güncelleme
-async def update_alt_ust_message(tracker_info, result_type, current_step=None, result_details=None):
-    try:
-        game_num = tracker_info['sent_game_number']
-        tahmin = tracker_info['signal_tahmin']
-        reason = tracker_info['reason']
-        message_obj = tracker_info['message_obj']
-        
-        tahmin_emoji = "⬇️ ALT" if tahmin == "alt" else "⬆️ ÜST"
-        tahmin_text = "5.5 ALT" if tahmin == "alt" else "5.5 ÜST"
-        
-        duration = datetime.now(GMT3) - tracker_info['start_time']
-        duration_str = f"{duration.seconds // 60}d {duration.seconds % 60}s"
-        gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
-        
-        if result_details:
-            tracker_info['results'].append(result_details)
-        
-        if result_type == 'win':
-            new_text = f"✅ **5.5 ALT/ÜST KAZANÇ** ✅\n#N{game_num} - {tahmin_emoji}\n📊 Sebep: {reason}\n🎯 Seviye: {current_step}. Seviye\n⏱️ Süre: {duration_str}\n🕒 Bitiş: {gmt3_time}\n🏆 **SONUÇ: KAZANDINIZ!**"
-        elif result_type == 'loss':
-            new_text = f"❌ **5.5 ALT/ÜST KAYIP** ❌\n#N{game_num} - {tahmin_emoji}\n📊 Sebep: {reason}\n🎯 Seviye: {current_step}. Seviye\n⏱️ Süre: {duration_str}\n🕒 Bitiş: {gmt3_time}\n💔 **SONUÇ: KAYBETTİNİZ**"
-        elif result_type == 'progress':
-            step_details = f"{current_step}. seviye → #{tracker_info['expected_game_number_for_check']}"
-            results_history = "\n".join([f"• {r}" for r in tracker_info['results']]) if tracker_info['results'] else "• İlk deneme"
-            new_text = f"🔄 **5.5 ALT/ÜST MARTINGALE** 🔄\n#N{game_num} - {tahmin_emoji}\n📊 Sebep: {reason}\n🎯 Adım: {step_details}\n⏱️ Süre: {duration_str}\n🕒 Son Güncelleme: {gmt3_time}\n📈 Geçmiş:\n{results_history}\n🎲 **SONRAKİ: #{tracker_info['expected_game_number_for_check']}**"
-        elif result_type == 'step_result':
-            new_text = f"📊 **5.5 ALT/ÜST ADIM SONUCU** 📊\n#N{game_num} - {tahmin_emoji}\n🎯 Adım: {current_step}. seviye\n📋 Sonuç: {result_details}\n⏱️ Süre: {duration_str}\n🕒 Zaman: {gmt3_time}\n🔄 **DEVAM EDİYOR...**"
-        
-        await message_obj.edit(new_text)
-        print(f"✏️ 5.5 Alt/Üst sinyal güncellendi: #{game_num} - {result_type}")
-        
-    except MessageNotModifiedError: 
-        pass
-    except Exception as e: 
-        print(f"❌ 5.5 Alt/Üst mesaj düzenleme hatası: {e}")
-
-# 5.5 Alt/Üst istatistik güncelleme
-def update_alt_ust_stats(tahmin, result_type, steps=0):
-    stats = alt_ust_stats[tahmin]
-    stats['total'] += 1
-    
-    if result_type == 'win':
-        stats['wins'] += 1
-        stats['profit'] += 1
-    else:
-        stats['losses'] += 1
-        stats['profit'] -= (2**steps - 1)
-
-# 5.5 Alt/Üst performans raporu
-def get_alt_ust_performance():
-    performance_text = "📊 **5.5 ALT/ÜST PERFORMANSI** 📊\n\n"
-    
-    for tahmin, stats in alt_ust_stats.items():
-        tahmin_adi = "ALT" if tahmin == "alt" else "ÜST"
-        emoji = "⬇️" if tahmin == "alt" else "⬆️"
-        
-        if stats['total'] > 0:
-            win_rate = (stats['wins'] / stats['total']) * 100
-            performance_text += f"{emoji} **{tahmin_adi}**\n"
-            performance_text += f"   📊 Toplam: {stats['total']} | ⭕: {stats['wins']} | ❌: {stats['losses']}\n"
-            performance_text += f"   🎯 Başarı: %{win_rate:.1f} | 💰 Kâr: {stats['profit']} birim\n\n"
-        else:
-            performance_text += f"{emoji} **{tahmin_adi}**\n"
-            performance_text += f"   📊 Henüz veri yok\n\n"
-    
-    return performance_text
-
 def analyze_simple_pattern(player_cards, banker_cards, game_number):
     try:
         signal_color = extract_largest_value_suit(player_cards)
@@ -349,30 +99,77 @@ def analyze_simple_pattern(player_cards, banker_cards, game_number):
         print(f"❌ Pattern analysis error: {e}")
         return None, f"Hata: {e}"
 
+def check_high_total_and_three_cards(player_cards, banker_cards):
+    """
+    Oyuncu ve banker kart toplamlarının 10.5 üstü (11 ve üzeri) olup olmadığını ve
+    oyuncunun 3 kart açıp açmadığını kontrol eder.
+    """
+    try:
+        # Oyuncu ve banker kartlarını parçala
+        player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards)
+        banker_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', banker_cards)
+
+        # Kart değerlerini hesapla (mod 10 alınmamış toplam için)
+        player_degerler = [get_baccarat_value(kart[0]) for kart in player_kartlar]
+        banker_degerler = [get_baccarat_value(kart[0]) for kart in banker_kartlar]
+
+        player_toplam = sum(player_degerler)
+        banker_toplam = sum(banker_degerler)
+
+        # 10.5 üstü kontrolü: 11 ve üzeri
+        if player_toplam >= 11 and banker_toplam >= 11:
+            signal_color = extract_largest_value_suit(player_cards)
+            if signal_color:
+                return signal_color, f"🔥 10.5+ ÇİFT YÜKSEK (P:{player_toplam} B:{banker_toplam})"
+
+        # Oyuncu 3 kart açmış mı?
+        if len(player_kartlar) == 3:
+            signal_color = extract_largest_value_suit(player_cards)
+            if signal_color:
+                return signal_color, f"🎯 3 KARTLI OYUNCU (P:{player_toplam})"
+
+        return None, "Koşul sağlanmadı"
+
+    except Exception as e:
+        print(f"❌ check_high_total_and_three_cards hatası: {e}")
+        return None, f"Hata: {e}"
+
 def besli_onay_sistemi(player_cards, banker_cards, game_number):
     onaylar = []
     temel_renk = extract_largest_value_suit(player_cards)
     if temel_renk: 
         onaylar.append(("C2_3", temel_renk))
         print(f"✅ C2_3 onay: {temel_renk}")
+    
+    # Yeni özellikleri kontrol et
+    high_total_renk, high_total_sebep = check_high_total_and_three_cards(player_cards, banker_cards)
+    if high_total_renk:
+        onaylar.append(("HIGH_TOTAL", high_total_renk))
+        print(f"✅ Yüksek toplam onay: {high_total_renk} - {high_total_sebep}")
+
     pattern_renk, pattern_sebep = analyze_simple_pattern(player_cards, banker_cards, game_number)
     if pattern_renk and "STANDART" not in pattern_sebep:
         onaylar.append(("PATTERN", pattern_renk))
         print(f"✅ Pattern onay: {pattern_renk} - {pattern_sebep}")
+    
     if color_trend:
         trend_renk = color_trend[-1] if color_trend else None
         if trend_renk: onaylar.append(("TREND", trend_renk))
+    
     if len(color_trend) >= 3:
         son_uc = color_trend[-3:]
         if son_uc.count(temel_renk) >= 2: onaylar.append(("REPEAT", temel_renk))
+    
     renk_oyları = {}
     for yontem, renk in onaylar: renk_oyları[renk] = renk_oyları.get(renk, 0) + 1
+    
     if renk_oyları:
         kazanan_renk = max(renk_oyları, key=renk_oyları.get)
         oy_sayisi = renk_oyları[kazanan_renk]
         güven = oy_sayisi / 5
         print(f"📊 5'li onay: {kazanan_renk} - {oy_sayisi}/5 - %{güven*100:.1f}")
         if oy_sayisi >= 3 and güven >= 0.6: return kazanan_renk, f"✅ 5-Lİ ONAY ({oy_sayisi}/5) - %{güven*100:.1f}"
+    
     return None, "❌ 5'li onay sağlanamadı"
 
 def super_filtre_kontrol(signal_color, reason, game_number):
@@ -493,7 +290,7 @@ def get_pattern_performance():
     
     for pattern_type, stats in sorted_patterns:
         if stats['total'] > 0:
-            win_rate = (stats['wins'] / stats['total']) * 100
+            win_rate = (stats['wins'] / x[1]['total']) * 100
             performance_text += f"{pattern_type}\n"
             performance_text += f"   📊 Toplam: {stats['total']} | ⭕: {stats['wins']} | ❌: {stats['losses']}\n"
             performance_text += f"   🎯 Başarı: %{win_rate:.1f} | 💰 Kâr: {stats['profit']} birim\n"
@@ -675,6 +472,11 @@ async def quantum_hibrit_sistemi(game_info):
     if signal_color1 and "STANDART" not in reason1:
         pattern_sonuclari.append((signal_color1, reason1, "ANA", 1.0))
     
+    # Yeni özellikleri kontrol et
+    high_total_renk, high_total_sebep = check_high_total_and_three_cards(game_info['player_cards'], game_info['banker_cards'])
+    if high_total_renk:
+        pattern_sonuclari.append((high_total_renk, high_total_sebep, "HIGH_TOTAL", 1.1))
+    
     quantum_renk, quantum_sebep = quantum_pattern_analizi(game_info)
     if quantum_renk:
         pattern_sonuclari.append((quantum_renk, quantum_sebep, "QUANTUM", 0.9))
@@ -709,7 +511,7 @@ async def quantum_hibrit_sistemi(game_info):
     
     filtre_sonuclari = []
     
-    elite_patternler = ['🏆 DOĞAL KAZANÇ', '🚀 SÜPER HİBRİT', '✅ 5-Lİ ONAY', '🎯 GÜÇLÜ EL']
+    elite_patternler = ['🏆 DOĞAL KAZANÇ', '🚀 SÜPER HİBRİT', '✅ 5-Lİ ONAY', '🎯 GÜÇLÜ EL', '🔥 10.5+ ÇİFT YÜKSEK', '🎯 3 KARTLI OYUNCU']
     pattern_kalite = any(sebep in elite_patternler for _, sebep, _, _ in pattern_sonuclari)
     filtre_sonuclari.append(pattern_kalite)
     
@@ -852,6 +654,11 @@ async def quantum_pro_sistemi(game_info):
     if signal_color1 and "STANDART" not in reason1:
         pattern_sonuclari.append((signal_color1, reason1, "ANA", 1.2))
     
+    # Yeni özellikleri kontrol et
+    high_total_renk, high_total_sebep = check_high_total_and_three_cards(game_info['player_cards'], game_info['banker_cards'])
+    if high_total_renk:
+        pattern_sonuclari.append((high_total_renk, high_total_sebep, "HIGH_TOTAL", 1.3))
+    
     quantum_renk, quantum_sebep = quantum_pattern_analizi(game_info)
     if quantum_renk:
         pattern_sonuclari.append((quantum_renk, quantum_sebep, "QUANTUM", 1.1))
@@ -877,7 +684,7 @@ async def quantum_pro_sistemi(game_info):
         return
     
     renk_agirliklari = {}
-    elite_patternler = ['🏆 DOĞAL KAZANÇ', '🚀 SÜPER HİBRİT', '✅ 5-Lİ ONAY', '🎯 GÜÇLÜ EL']
+    elite_patternler = ['🏆 DOĞAL KAZANÇ', '🚀 SÜPER HİBRİT', '✅ 5-Lİ ONAY', '🎯 GÜÇLÜ EL', '🔥 10.5+ ÇİFT YÜKSEK', '🎯 3 KARTLI OYUNCU']
     
     for renk, sebep, tip, agirlik in pattern_sonuclari:
         pattern_data = pattern_stats.get(sebep, {'total': 0, 'wins': 0})
@@ -955,11 +762,16 @@ async def quantum_pro_sistemi(game_info):
 async def master_elite_sistemi(game_info):
     print("🏆 MASTER ELITE analiz başlıyor...")
     
-    ELITE_PATTERNS = ['🏆 DOĞAL KAZANÇ', '🚀 SÜPER HİBRİT']
+    ELITE_PATTERNS = ['🏆 DOĞAL KAZANÇ', '🚀 SÜPER HİBRİT', '🔥 10.5+ ÇİFT YÜKSEK', '🎯 3 KARTLI OYUNCU']
     
     signal_color, reason = analyze_simple_pattern(game_info['player_cards'], 
                                                  game_info['banker_cards'], 
                                                  game_info['game_number'])
+    
+    # Yeni özellikleri kontrol et
+    high_total_renk, high_total_sebep = check_high_total_and_three_cards(game_info['player_cards'], game_info['banker_cards'])
+    if high_total_renk and high_total_sebep in ELITE_PATTERNS:
+        signal_color, reason = high_total_renk, high_total_sebep
     
     if reason not in ELITE_PATTERNS:
         print(f"🚫 Master Elite: {reason} elite değil")
@@ -1020,10 +832,8 @@ async def master_elite_sistemi(game_info):
     await send_new_signal(next_game_num, signal_color, 
                          f"🏆 MASTER ELITE - {reason} | {filtre_gecen}/10 Filtre", game_info)
 
-# RENK SİNYALİ GÖNDERME - ÇAKIŞMA ENGELLİ KALDIRILDI
 async def send_new_signal(game_num, signal_suit, reason, c2_3_info=None):
     global is_signal_active, daily_signal_count
-        
     try:
         suit_display = get_suit_display_name(signal_suit)
         if c2_3_info:
@@ -1036,10 +846,8 @@ async def send_new_signal(game_num, signal_suit, reason, c2_3_info=None):
         gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
         signal_text = f"🎯 **SİNYAL BAŞLADI** 🎯\n#N{game_num} - {suit_display}\n📊 Tetikleyici: {trigger_info}\n🎯 Sebep: {reason}\n⚡ Strateji: Martingale {MAX_MARTINGALE_STEPS} Seviye\n🕒 {gmt3_time} (GMT+3)\n🔴 SONUÇ: BEKLENİYOR..."
         sent_message = await client.send_message(KANAL_HEDEF, signal_text)
-        print(f"🚀 Renk Sinyali gönderildi: #N{game_num} - {suit_display} - {trigger_info}")
+        print(f"🚀 Sinyal gönderildi: #N{game_num} - {suit_display} - {trigger_info}")
         daily_signal_count += 1
-        
-        # Takipçiye ekle - benzersiz key için game_num kullanıyoruz
         martingale_trackers[game_num] = {
             'message_obj': sent_message, 
             'step': 0, 
@@ -1054,7 +862,7 @@ async def send_new_signal(game_num, signal_suit, reason, c2_3_info=None):
         }
         is_signal_active = True
     except Exception as e: 
-        print(f"❌ Renk Sinyali gönderme hatası: {e}")
+        print(f"❌ Sinyal gönderme hatası: {e}")
 
 async def update_signal_message(tracker_info, result_type, current_step=None, result_details=None):
     try:
@@ -1089,123 +897,82 @@ async def update_signal_message(tracker_info, result_type, current_step=None, re
             new_text = f"📊 **ADIM SONUCU** 📊\n#N{signal_game_num} - {suit_display}\n🎯 Adım: {current_step}. seviye\n📋 Sonuç: {result_details}\n⏱️ Süre: {duration_str}\n🕒 Zaman: {gmt3_time}\n🔄 **DEVAM EDİYOR...**"
         
         await message_obj.edit(new_text)
-        print(f"✏️ Renk Sinyali güncellendi: #{signal_game_num} - {result_type}")
+        print(f"✏️ Sinyal güncellendi: #{signal_game_num} - {result_type}")
     except MessageNotModifiedError: 
         pass
     except Exception as e: 
-        print(f"❌ Renk Sinyali mesaj düzenleme hatası: {e}")
+        print(f"❌ Mesaj düzenleme hatası: {e}")
 
 async def check_martingale_trackers():
     global martingale_trackers, is_signal_active
     trackers_to_remove = []
-    
-    for signal_key, tracker_info in list(martingale_trackers.items()):
-        # Renk tabanlı sinyaller
-        if 'signal_suit' in tracker_info:
-            current_step, signal_suit, game_to_check = tracker_info['step'], tracker_info['signal_suit'], tracker_info['expected_game_number_for_check']
-            
-            # Oyun sonucu henüz gelmemişse devam et
-            if game_to_check not in game_results:
-                continue
-                
-            result_info = game_results.get(game_to_check)
-            if not result_info['is_final']:
-                continue
-                
-            player_cards_str = result_info['player_cards']
-            
-            # Sinyal kontrolü
-            signal_won_this_step = False
-            try:
-                # Oyundaki tüm renkleri kontrol et
-                suits_in_game = re.findall(r'[♣♦♥♠]', player_cards_str)
-                signal_won_this_step = signal_suit in suits_in_game
-                print(f"🔍 Renk kontrol: #{tracker_info['sent_game_number']} → #{game_to_check} | Aranan: {signal_suit} | Bulunan: {suits_in_game} | Sonuç: {signal_won_this_step}")
-            except Exception as e:
-                print(f"❌ Renk kontrol hatası: {e}")
-                continue
-            
-            if signal_won_this_step:
-                result_details = f"#{game_to_check} ✅ Kazanç - {current_step}. seviye"
-                await update_signal_message(tracker_info, 'step_result', current_step, result_details)
-                await asyncio.sleep(1)
-                await update_signal_message(tracker_info, 'win', current_step)
-                trackers_to_remove.append(signal_key)
-                is_signal_active = False
-                recent_games.append({'kazanç': True, 'adim': current_step})
-                if len(recent_games) > 20: recent_games.pop(0)
-                print(f"🎉 Renk Sinyali #{tracker_info['sent_game_number']} KAZANDI! Seviye: {current_step}")
+    for signal_game_num, tracker_info in list(martingale_trackers.items()):
+        current_step, signal_suit, game_to_check = tracker_info['step'], tracker_info['signal_suit'], tracker_info['expected_game_number_for_check']
+        if game_to_check not in game_results: continue
+        result_info = game_results.get(game_to_check)
+        if not result_info['is_final']: continue
+        player_cards_str = result_info['player_cards']
+        signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
+        print(f"🔍 Sinyal kontrol: #{signal_game_num} (Seviye {current_step}) → #{game_to_check}")
+        if signal_won_this_step:
+            result_details = f"#{game_to_check} ✅ Kazanç - {current_step}. seviye"
+            await update_signal_message(tracker_info, 'step_result', current_step, result_details)
+            await asyncio.sleep(1)
+            await update_signal_message(tracker_info, 'win', current_step)
+            trackers_to_remove.append(signal_game_num)
+            is_signal_active = False
+            recent_games.append({'kazanç': True, 'adim': current_step})
+            if len(recent_games) > 20: recent_games.pop(0)
+            print(f"🎉 Sinyal #{signal_game_num} KAZANDI! Seviye: {current_step}")
+        else:
+            result_details = f"#{game_to_check} ❌ Kayıp - {current_step}. seviye"
+            await update_signal_message(tracker_info, 'step_result', current_step, result_details)
+            await asyncio.sleep(1)
+            if current_step < MAX_MARTINGALE_STEPS:
+                next_step, next_game_num = current_step + 1, get_next_game_number(game_to_check)
+                martingale_trackers[signal_game_num]['step'], martingale_trackers[signal_game_num]['expected_game_number_for_check'] = next_step, next_game_num
+                await update_signal_message(tracker_info, 'progress', next_step)
+                print(f"📈 Sinyal #{signal_game_num} → {next_step}. seviye → #{next_game_num}")
             else:
-                result_details = f"#{game_to_check} ❌ Kayıp - {current_step}. seviye"
-                await update_signal_message(tracker_info, 'step_result', current_step, result_details)
-                await asyncio.sleep(1)
-                
-                if current_step < MAX_MARTINGALE_STEPS:
-                    next_step, next_game_num = current_step + 1, get_next_game_number(game_to_check)
-                    tracker_info['step'] = next_step
-                    tracker_info['expected_game_number_for_check'] = next_game_num
-                    await update_signal_message(tracker_info, 'progress', next_step)
-                    print(f"📈 Renk Sinyali #{tracker_info['sent_game_number']} → {next_step}. seviye → #{next_game_num}")
-                else:
-                    await update_signal_message(tracker_info, 'loss', current_step)
-                    trackers_to_remove.append(signal_key)
-                    is_signal_active = False
-                    recent_games.append({'kazanç': False, 'adim': current_step})
-                    if len(recent_games) > 20: recent_games.pop(0)
-                    print(f"💔 Renk Sinyali #{tracker_info['sent_game_number']} KAYBETTİ! Son seviye: {current_step}")
-        
-        # 5.5 Alt/Üst sinyaller
-        elif 'signal_type' in tracker_info and tracker_info['signal_type'] == 'alt_ust':
-            completed = await check_alt_ust_tracker(tracker_info)
-            if completed:
-                trackers_to_remove.append(signal_key)
+                await update_signal_message(tracker_info, 'loss', current_step)
+                trackers_to_remove.append(signal_game_num)
                 is_signal_active = False
-    
-    for key_to_remove in trackers_to_remove:
-        if key_to_remove in martingale_trackers: 
-            del martingale_trackers[key_to_remove]
-            print(f"🧹 Takipçi temizlendi: {key_to_remove}")
+                recent_games.append({'kazanç': False, 'adim': current_step})
+                if len(recent_games) > 20: recent_games.pop(0)
+                print(f"💔 Sinyal #{signal_game_num} KAYBETTİ! Son seviye: {current_step}")
+    for game_num_to_remove in trackers_to_remove:
+        if game_num_to_remove in martingale_trackers: 
+            del martingale_trackers[game_num_to_remove]
 
 def extract_game_info_from_message(text):
     game_info = {'game_number': None, 'player_cards': '', 'banker_cards': '', 'is_final': False, 'is_player_drawing': False, 'is_c2_3': False, 'c2_3_type': None, 'c2_3_description': ''}
     try:
         game_match = re.search(r'#N(\d+)', text)
-        if game_match: 
-            game_info['game_number'] = int(game_match.group(1))
-        
-        # Player kartlarını daha iyi tespit et
-        player_match = re.search(r'Player\s*:\s*(\d+)\s*\((.*?)\)', text)
-        if not player_match:
-            player_match = re.search(r'(\d+)\s*\((.*?)\)', text)  # Alternatif pattern
-        if player_match: 
-            game_info['player_cards'] = player_match.group(2)
-        
-        # Banker kartlarını daha iyi tespit et
-        banker_match = re.search(r'Banker\s*:\s*(\d+)\s*\((.*?)\)', text)
-        if not banker_match:
-            banker_match = re.search(r'\d+\s+\((.*?)\)', text)  # Alternatif pattern
-        if banker_match: 
-            game_info['banker_cards'] = banker_match.group(1) if banker_match.lastindex >= 1 else banker_match.group(0)
-        
+        if game_match: game_info['game_number'] = int(game_match.group(1))
+        player_match = re.search(r'\((.*?)\)', text)
+        if player_match: game_info['player_cards'] = player_match.group(1)
+        banker_match = re.search(r'\d+\s+\((.*?)\)', text)
+        if banker_match: game_info['banker_cards'] = banker_match.group(1)
         for trigger_type, trigger_data in C2_3_TYPES.items():
             if trigger_type in text:
                 game_info['is_c2_3'], game_info['c2_3_type'], game_info['c2_3_description'] = True, trigger_type, trigger_data['name']
                 break
-        
-        # Final kontrolünü iyileştir
-        if ('✅' in text or '🔰' in text or '#X' in text or 'RESULT' in text or 'RES:' in text):
-            game_info['is_final'] = True
-            
-        print(f"📋 Oyun #{game_info['game_number']} bilgisi: Player={game_info['player_cards'][:30]}..., Banker={game_info['banker_cards'][:30]}..., Final={game_info['is_final']}, C2_3={game_info['is_c2_3']}")
-        
-    except Exception as e: 
-        print(f"❌ Oyun bilgisi çıkarma hatası: {e}")
-    
+        if ('✅' in text or '🔰' in text or '#X' in text): game_info['is_final'] = True
+    except Exception as e: print(f"❌ Oyun bilgisi çıkarma hatası: {e}")
     return game_info
 
 async def normal_hibrit_sistemi(game_info):
     trigger_game_num, c2_3_info = game_info['game_number'], {'c2_3_type': game_info.get('c2_3_type'), 'c2_3_description': game_info.get('c2_3_description')}
     print(f"🎯 Normal Hibrit analiz ediyor {c2_3_info['c2_3_description']}...")
+
+    # Önce yeni özellikleri kontrol et
+    high_total_renk, high_total_sebep = check_high_total_and_three_cards(game_info['player_cards'], game_info['banker_cards'])
+    if high_total_renk:
+        next_game_num = get_next_game_number(trigger_game_num)
+        await send_new_signal(next_game_num, high_total_renk, high_total_sebep, c2_3_info)
+        print(f"🚀 Normal Hibrit (yeni özellik) sinyal gönderildi: #{next_game_num} - {high_total_sebep}")
+        return
+
     signal_color, reason = analyze_simple_pattern(game_info['player_cards'], game_info['banker_cards'], trigger_game_num)
     if signal_color:
         next_game_num = get_next_game_number(trigger_game_num)
@@ -1255,13 +1022,10 @@ async def handle_source_channel_message(event):
                     await quantum_pro_sistemi(game_info)
                 elif SISTEM_MODU == "master_elite":
                     await master_elite_sistemi(game_info)
-                
-                # 5.5 Alt/Üst sistemini her modda çalıştır
-                await alt_ust_hibrit_sistemi(game_info)
                     
     except Exception as e: print(f"❌ Mesaj işleme hatası: {e}")
 
-# KOMUTLAR (Aynı kalıyor...)
+# KOMUTLAR
 @client.on(events.NewMessage(pattern='(?i)/basla'))
 async def handle_start(event): 
     await event.reply("🤖 Royal Baccarat Bot Aktif! 🎯")
@@ -1403,42 +1167,6 @@ async def handle_tavsiye(event):
     else:
         await event.reply("📊 Henüz yeterli veri yok. Daha fazla sinyal bekleyin.")
 
-# YENİ 5.5 ALT/ÜST KOMUTLARI
-@client.on(events.NewMessage(pattern='(?i)/altust'))
-async def handle_altust(event):
-    analysis = get_alt_ust_performance()
-    await event.reply(analysis)
-
-@client.on(events.NewMessage(pattern='(?i)/altust_trend'))
-async def handle_altust_trend(event):
-    if not alt_ust_trend:
-        await event.reply("📊 5.5 Alt/Üst trend verisi bulunmuyor")
-        return
-    
-    alt_count = alt_ust_trend.count('alt')
-    ust_count = alt_ust_trend.count('ust')
-    total = len(alt_ust_trend)
-    
-    analysis = f"📊 **5.5 ALT/ÜST TREND ANALİZİ** 📊\n\n"
-    analysis += f"Son {total} oyun dağılımı:\n"
-    analysis += f"⬇️ ALT: {alt_count} (%{alt_count/total*100:.1f})\n"
-    analysis += f"⬆️ ÜST: {ust_count} (%{ust_count/total*100:.1f})\n\n"
-    
-    if alt_count > ust_count:
-        analysis += f"🔥 **DOMINANT TAHMİN:** ⬇️ ALT ({alt_count} kez)"
-    elif ust_count > alt_count:
-        analysis += f"🔥 **DOMINANT TAHMİN:** ⬆️ ÜST ({ust_count} kez)"
-    else:
-        analysis += "⚖️ **DENGE:** Eşit dağılım"
-    
-    await event.reply(analysis)
-
-@client.on(events.NewMessage(pattern='(?i)/mod_altust'))
-async def handle_mod_altust(event):
-    global SISTEM_MODU
-    SISTEM_MODU = "alt_ust_hibrit"
-    await event.reply("🎯 5.5 ALT/ÜST modu aktif! Kart değerleri bazlı tahmin sistemi. 3 martingale seviye.")
-
 @client.on(events.NewMessage(pattern='(?i)/mod_normal'))
 async def handle_mod_normal(event):
     global SISTEM_MODU
@@ -1477,8 +1205,8 @@ async def handle_mod_status(event):
 async def handle_temizle(event):
     if event.sender_id != ADMIN_ID: 
         return await event.reply("❌ Yetkiniz yok!")
-    global color_trend, recent_games, daily_signal_count, alt_ust_trend
-    color_trend, recent_games, daily_signal_count, alt_ust_trend = [], [], 0, []
+    global color_trend, recent_games, daily_signal_count
+    color_trend, recent_games, daily_signal_count = [], [], 0
     await event.reply("✅ Trend verileri temizlendi! Sinyal sayacı sıfırlandı.")
 
 @client.on(events.NewMessage(pattern='(?i)/acil_durdur'))
@@ -1516,8 +1244,6 @@ async def handle_yardim(event):
 • /eniyi - En iyi performans
 • /enkotu - En kötü performans
 • /tavsiye - Trading tavsiyesi
-• /altust - 5.5 Alt/Üst performansı
-• /altust_trend - 5.5 Alt/Üst trend analizi
 
 🎛️ **SİSTEM MODLARI:**
 • /mod_normal - Normal Hibrit Mod
@@ -1525,7 +1251,6 @@ async def handle_yardim(event):
 • /mod_quantum - Quantum Hibrit Mod
 • /mod_quantumpro - Quantum Pro Mod
 • /mod_masterelite - Master Elite Mod
-• /mod_altust - 5.5 Alt/Üst Mod
 • /mod_durum - Aktif modu göster
 
 ⚡ **ADMIN KOMUTLARI:**
@@ -1533,7 +1258,7 @@ async def handle_yardim(event):
 • /acil_durdur - Acil durdurma
 • /aktif_et - Sistemi tekrar aktif et
 
-🔧 **Sistem:** Hibrit Pattern + Martingale {MAX_MARTINGALE_STEPS} Seviye + 5.5 Alt/Üst
+🔧 **Sistem:** Hibrit Pattern + Martingale {MAX_MARTINGALE_STEPS} Seviye
 🕒 **Saat Dilimi:** GMT+3 (İstanbul)
 """.format(MAX_MARTINGALE_STEPS=MAX_MARTINGALE_STEPS)
     await event.reply(yardim_mesaji)
@@ -1550,7 +1275,6 @@ if __name__ == '__main__':
     print(f"⚛️ Quantum Hibrit Sistem: AKTİF")
     print(f"🚀 Quantum PRO Sistem: AKTİF")
     print(f"🏆 Master Elite Sistem: AKTİF")
-    print(f"🎯 5.5 Alt/Üst Sistemi: AKTİF")
     print(f"🕒 Saat Dilimi: GMT+3")
     print("⏳ Bağlanıyor...")
     try:
