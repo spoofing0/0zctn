@@ -11,7 +11,7 @@ BOT_TOKEN = ''  # 🔑 Buraya bot tokenınızı yazın
 KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@royalbaccfree"  # 📢 Hedef kanal
 ADMIN_ID = 1136442929  # 👑 Admin ID
-SISTEM_MODU = "normal_hibrit"
+SISTEM_MODU = "normal"  # normal, 10.5plus, 3kart, renk
 GMT3 = pytz.timezone('Europe/Istanbul')
 client = TelegramClient('kolera_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
@@ -557,19 +557,30 @@ async def normal_hibrit_sistemi(game_info):
 
     # Önce yeni özellikleri kontrol et (10.5+ ve 3 kart)
     special_results = check_high_total_and_three_cards(game_info['player_cards'], game_info['banker_cards'])
-    for signal_color, reason in special_results:
-        next_game_num = get_next_game_number(trigger_game_num)
-        await send_new_signal(next_game_num, signal_color, reason, c2_3_info)
-        print(f"🚀 Normal Hibrit (özel sinyal) gönderildi: #{next_game_num} - {reason}")
+    
+    # MOD KONTROLLERİ
+    if SISTEM_MODU == "normal" or SISTEM_MODU == "10.5plus" or SISTEM_MODU == "3kart":
+        for signal_color, reason in special_results:
+            # 10.5+ modunda sadece 10.5+ sinyallerini gönder
+            if SISTEM_MODU == "10.5plus" and "10.5+" not in reason:
+                continue
+            # 3kart modunda sadece 3 kart sinyallerini gönder
+            if SISTEM_MODU == "3kart" and "3 KART" not in reason:
+                continue
+                
+            next_game_num = get_next_game_number(trigger_game_num)
+            await send_new_signal(next_game_num, signal_color, reason, c2_3_info)
+            print(f"🚀 Normal Hibrit (özel sinyal) gönderildi: #{next_game_num} - {reason}")
 
-    # Sonra normal pattern analizi
-    signal_color, reason = analyze_simple_pattern(game_info['player_cards'], game_info['banker_cards'], trigger_game_num)
-    if signal_color:
-        next_game_num = get_next_game_number(trigger_game_num)
-        await send_new_signal(next_game_num, signal_color, reason, c2_3_info)
-        print(f"🚀 Normal Hibrit sinyal gönderildi: #{next_game_num} - {reason}")
-    else: 
-        print(f"🚫 Normal Hibrit: Renk sinyali yok - {reason}")
+    # Renk sinyali için mod kontrolü
+    if SISTEM_MODU == "normal" or SISTEM_MODU == "renk":
+        signal_color, reason = analyze_simple_pattern(game_info['player_cards'], game_info['banker_cards'], trigger_game_num)
+        if signal_color:
+            next_game_num = get_next_game_number(trigger_game_num)
+            await send_new_signal(next_game_num, signal_color, reason, c2_3_info)
+            print(f"🚀 Normal Hibrit sinyal gönderildi: #{next_game_num} - {reason}")
+        else: 
+            print(f"🚫 Normal Hibrit: Renk sinyali yok - {reason}")
 
 async def super_hibrit_sistemi(game_info):
     trigger_game_num, c2_3_info = game_info['game_number'], {'c2_3_type': game_info.get('c2_3_type'), 'c2_3_description': game_info.get('c2_3_description')}
@@ -607,10 +618,12 @@ async def handle_source_channel_message(event):
                     await normal_hibrit_sistemi(game_info)
                 elif SISTEM_MODU == "super_hibrit": 
                     await super_hibrit_sistemi(game_info)
+                else:
+                    await normal_hibrit_sistemi(game_info)
                     
     except Exception as e: print(f"❌ Mesaj işleme hatası: {e}")
 
-# KOMUTLAR (kısaltılmış)
+# KOMUTLAR
 @client.on(events.NewMessage(pattern='(?i)/basla'))
 async def handle_start(event): 
     await event.reply("🤖 Royal Baccarat Bot Aktif! 🎯")
@@ -636,6 +649,69 @@ async def handle_durum(event):
 ⚡ **Sistem:** Hibrit Pattern + Martingale {MAX_MARTINGALE_STEPS} Seviye
 """
     await event.reply(durum_mesaji)
+
+# MOD KOMUTLARI
+@client.on(events.NewMessage(pattern='(?i)/mod_normal'))
+async def handle_mod_normal(event):
+    global SISTEM_MODU
+    SISTEM_MODU = "normal"
+    await event.reply("✅ NORMAL modu aktif! Tüm sinyaller (10.5+, 3 kart, renk)")
+
+@client.on(events.NewMessage(pattern='(?i)/mod_10plus'))
+async def handle_mod_10plus(event):
+    global SISTEM_MODU
+    SISTEM_MODU = "10.5plus"
+    await event.reply("🔥 10.5+ MODU aktif! Sadece 10.5+ sinyalleri")
+
+@client.on(events.NewMessage(pattern='(?i)/mod_3kart'))
+async def handle_mod_3kart(event):
+    global SISTEM_MODU
+    SISTEM_MODU = "3kart"
+    await event.reply("🎯 3 KART MODU aktif! Sadece oyuncu 3 kart açtığında")
+
+@client.on(events.NewMessage(pattern='(?i)/mod_renk'))
+async def handle_mod_renk(event):
+    global SISTEM_MODU
+    SISTEM_MODU = "renk"
+    await event.reply("🎨 RENK MODU aktif! Sadece renk sinyalleri")
+
+@client.on(events.NewMessage(pattern='(?i)/mod_durum'))
+async def handle_mod_status(event): 
+    mod_durum = {
+        "normal": "NORMAL (Tüm sinyaller)",
+        "10.5plus": "10.5+ MODU",
+        "3kart": "3 KART MODU", 
+        "renk": "RENK MODU"
+    }
+    await event.reply(f"🎛️ Aktif Mod: {mod_durum.get(SISTEM_MODU, SISTEM_MODU)}")
+
+@client.on(events.NewMessage(pattern='(?i)/yardim'))
+async def handle_yardim(event):
+    yardim_mesaji = """🤖 **ROYAL BACCARAT BOT - YARDIM MENÜSÜ** 🤖
+
+🎯 **TEMEL KOMUTLAR:**
+• /basla - Botu başlat
+• /durum - Sistem durumu
+• /istatistik - Detaylı istatistikler
+• /performans - Performans raporu
+• /rapor - Günlük/haftalık rapor
+
+🎛️ **SİSTEM MODLARI:**
+• /mod_normal - Normal Mod (Tüm sinyaller)
+• /mod_10plus - 10.5+ Modu (Sadece 10.5+ sinyalleri)
+• /mod_3kart - 3 Kart Modu (Sadece 3 kart sinyalleri)
+• /mod_renk - Renk Modu (Sadece renk sinyalleri)
+• /mod_durum - Aktif modu göster
+
+⚡ **ADMIN KOMUTLARI:**
+• /temizle - Trend verilerini temizle
+• /acil_durdur - Acil durdurma
+• /aktif_et - Sistemi tekrar aktif et
+
+🔧 **Sistem:** Hibrit Pattern + Martingale {MAX_MARTINGALE_STEPS} Seviye
+🕒 **Saat Dilimi:** GMT+3 (İstanbul)
+""".format(MAX_MARTINGALE_STEPS=MAX_MARTINGALE_STEPS)
+    await event.reply(yardim_mesaji)
 
 if __name__ == '__main__':
     print("🤖 ROYAL BACCARAT BOT BAŞLIYOR...")
