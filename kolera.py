@@ -105,31 +105,31 @@ def analyze_simple_pattern(player_cards, banker_cards, game_number):
 
 def check_high_total_and_three_cards(player_cards, banker_cards):
     """
-    Oyuncu ve banker kart toplamlarının 10.5 üstü (11 ve üzeri) olup olmadığını ve
-    oyuncunun 3 kart açıp açmadığını kontrol eder.
+    GÜNCELLENDİ: 10.5+ sinyali için koşul değişti
     """
     try:
-        # Oyuncu ve banker kartlarını parçala
         player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards)
         banker_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', banker_cards)
 
-        # Kart değerlerini hesapla (mod 10 alınmamış toplam için)
         player_degerler = [get_baccarat_value(kart[0]) for kart in player_kartlar]
         banker_degerler = [get_baccarat_value(kart[0]) for kart in banker_kartlar]
 
         player_toplam = sum(player_degerler)
         banker_toplam = sum(banker_degerler)
+        
+        # TOPLAM değeri hesapla (oyuncu + banker)
+        toplam_deger = player_toplam + banker_toplam
 
         results = []
 
-        # 10.5 üstü kontrolü: 11 ve üzeri (DÜZELTME: mod 10 alınmamış toplam)
-        if player_toplam >= 11 and banker_toplam >= 11:
+        # 10.5+ SINYALİ: Oyuncu + Banker toplamı 11+ ise (DEĞİŞTİ)
+        if toplam_deger >= 11:
             signal_color = extract_largest_value_suit(player_cards)
             if signal_color:
-                results.append((signal_color, f"🔥 10.5+ ÇİFT YÜKSEK (P:{player_toplam} B:{banker_toplam})"))
-                print(f"✅ 10.5+ sinyali: {signal_color} - Oyuncu:{player_toplam}, Banker:{banker_toplam}")
+                results.append((signal_color, f"🔥 10.5+ ÇİFT YÜKSEK (Toplam:{toplam_deger})"))
+                print(f"✅ 10.5+ sinyali: {signal_color} - Toplam:{toplam_deger} (P:{player_toplam}+B:{banker_toplam})")
 
-        # Oyuncu 3 kart açmış mı? (DÜZELTME: sadece 3 kart kontrolü)
+        # 3 KART sinyali (değişmedi)
         if len(player_kartlar) == 3:
             signal_color = extract_largest_value_suit(player_cards)
             if signal_color:
