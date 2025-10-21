@@ -492,12 +492,26 @@ async def update_signal_message(tracker_info, result_type, current_step=None, re
 async def check_martingale_trackers():
     global martingale_trackers, is_signal_active
     trackers_to_remove = []
+    
+    print(f"🔍 Takipçi kontrolü başlıyor. Toplam {len(martingale_trackers)} takipçi var.")
+    
     for signal_game_num, tracker_info in list(martingale_trackers.items()):
         current_step, signal_suit, game_to_check = tracker_info['step'], tracker_info['signal_suit'], tracker_info['expected_game_number_for_check']
-        if game_to_check not in game_results: continue
+        
+        print(f"🔍 Takipçi kontrol: #{signal_game_num} -> #{game_to_check} (Seviye {current_step}) - Sebep: {tracker_info['reason']}")
+        
+        # Oyun sonucu var mı kontrol et
+        if game_to_check not in game_results:
+            print(f"❌ Oyun #{game_to_check} henüz sonuçlanmamış veya kayıtlı değil.")
+            continue
+            
         result_info = game_results.get(game_to_check)
-        if not result_info['is_final']: continue
+        if not result_info['is_final']:
+            print(f"❌ Oyun #{game_to_check} final değil.")
+            continue
+            
         player_cards_str = result_info['player_cards']
+        print(f"✅ Oyun #{game_to_check} sonuçlandı: {player_cards_str}")
         
         # ÖZEL SINYALLER İÇİN KAZANÇ KONTROLÜ
         reason = tracker_info['reason']
@@ -508,7 +522,7 @@ async def check_martingale_trackers():
         else:
             # Normal renk sinyali için renk kontrolü
             signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
-            print(f"🎨 Renk sinyali kontrolü: {signal_suit} → {signal_won_this_step}")
+            print(f"🎨 Renk sinyali kontrolü: {signal_suit} -> {signal_won_this_step} - Kartlar: {player_cards_str}")
         
         print(f"🔍 Sinyal kontrol: #{signal_game_num} (Seviye {current_step}) → #{game_to_check} - Kazanç: {signal_won_this_step}")
         
@@ -538,26 +552,48 @@ async def check_martingale_trackers():
                 recent_games.append({'kazanç': False, 'adim': current_step})
                 if len(recent_games) > 20: recent_games.pop(0)
                 print(f"💔 Sinyal #{signal_game_num} KAYBETTİ! Son seviye: {current_step}")
+    
+    # Tamamlanan takipçileri temizle
     for game_num_to_remove in trackers_to_remove:
         if game_num_to_remove in martingale_trackers: 
             del martingale_trackers[game_num_to_remove]
+            print(f"🧹 Takipçi temizlendi: #{game_num_to_remove}")
 
 def extract_game_info_from_message(text):
     game_info = {'game_number': None, 'player_cards': '', 'banker_cards': '', 'is_final': False, 'is_player_drawing': False, 'is_c2_3': False, 'c2_3_type': None, 'c2_3_description': ''}
     try:
+        print(f"🔍 Oyun bilgisi çıkarılıyor: {text}")
+        
         game_match = re.search(r'#N(\d+)', text)
-        if game_match: game_info['game_number'] = int(game_match.group(1))
+        if game_match: 
+            game_info['game_number'] = int(game_match.group(1))
+            print(f"✅ Oyun numarası: #{game_info['game_number']}")
+        
         player_match = re.search(r'\((.*?)\)', text)
-        if player_match: game_info['player_cards'] = player_match.group(1)
+        if player_match: 
+            game_info['player_cards'] = player_match.group(1)
+            print(f"✅ Oyuncu kartları: {game_info['player_cards']}")
+        
         banker_match = re.search(r'\d+\s+\((.*?)\)', text)
-        if banker_match: game_info['banker_cards'] = banker_match.group(1)
+        if banker_match: 
+            game_info['banker_cards'] = banker_match.group(1)
+            print(f"✅ Banker kartları: {game_info['banker_cards']}")
+        
         for trigger_type, trigger_data in C2_3_TYPES.items():
             if trigger_type in text:
                 game_info['is_c2_3'], game_info['c2_3_type'], game_info['c2_3_description'] = True, trigger_type, trigger_data['name']
+                print(f"✅ C2_3 Tetikleyici: {trigger_type} - {trigger_data['name']}")
                 break
-        if ('✅' in text or '🔰' in text or '#X' in text): game_info['is_final'] = True
-    except Exception as e: print(f"❌ Oyun bilgisi çıkarma hatası: {e}")
-    return game_info
+        
+        if ('✅' in text or '🔰' in text or '#X' in text): 
+            game_info['is_final'] = True
+            print(f"✅ Final sonuç: Evet")
+        
+        return game_info
+        
+    except Exception as e: 
+        print(f"❌ Oyun bilgisi çıkarma hatası: {e}")
+        return game_info
 
 async def normal_hibrit_sistemi(game_info):
     trigger_game_num, c2_3_info = game_info['game_number'], {'c2_3_type': game_info.get('c2_3_type'), 'c2_3_description': game_info.get('c2_3_description')}
@@ -612,25 +648,31 @@ async def handle_source_channel_message(event):
         cleaned_text = re.sub(r'\*\*', '', text).strip()
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
         gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
-        print(f"[{gmt3_time}] 📥 Mesaj: #{len(cleaned_text)} karakter")
+        print(f"[{gmt3_time}] 📥 Mesaj: {cleaned_text}")
+        
         game_info = extract_game_info_from_message(cleaned_text)
-        if game_info['game_number'] is None: return
+        if game_info['game_number'] is None: 
+            print("❌ Oyun numarası bulunamadı.")
+            return
+            
+        print(f"✅ Oyun #{game_info['game_number']} kaydedildi. Final: {game_info['is_final']}, C2_3: {game_info.get('is_c2_3', False)}")
+        
+        # Oyun sonucunu kaydet
         game_results[game_info['game_number']] = game_info
+        
+        # Takipçileri kontrol et
         await check_martingale_trackers()
+        
+        # Yeni sinyal gönder
         if not is_signal_active:
             if game_info['is_final'] and game_info.get('is_c2_3'):
                 trigger_game_num, c2_3_type, c2_3_desc = game_info['game_number'], game_info['c2_3_type'], game_info['c2_3_description']
                 print(f"🎯 {c2_3_desc} tespit edildi: #{trigger_game_num} - {c2_3_type}")
                 
-                if SISTEM_MODU == "normal_hibrit": 
-                    await normal_hibrit_sistemi(game_info)
-                elif SISTEM_MODU == "super_hibrit": 
-                    await super_hibrit_sistemi(game_info)
-                else:
-                    await normal_hibrit_sistemi(game_info)
+                await normal_hibrit_sistemi(game_info)
                     
-    except Exception as e: print(f"❌ Mesaj işleme hatası: {e}")
-
+    except Exception as e: 
+        print(f"❌ Mesaj işleme hatası: {e}")
 # KOMUTLAR
 @client.on(events.NewMessage(pattern='(?i)/basla'))
 async def handle_start(event): 
