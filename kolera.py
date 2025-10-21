@@ -105,8 +105,7 @@ def analyze_simple_pattern(player_cards, banker_cards, game_number):
 
 def check_high_total_and_three_cards(player_cards, banker_cards):
     """
-    GÜNCELLENDİ: 10.5+ sinyali için doğru mantık
-    - Oyuncu ve bankerin mod 10 değerleri toplamı >= 11
+    ACİL DÜZELTME: 10.5+ sinyali için doğru mod10 hesaplaması
     """
     try:
         player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards)
@@ -115,16 +114,16 @@ def check_high_total_and_three_cards(player_cards, banker_cards):
         player_degerler = [get_baccarat_value(kart[0]) for kart in player_kartlar]
         banker_degerler = [get_baccarat_value(kart[0]) for kart in banker_kartlar]
 
-        # MOD 10 değerlerini hesapla
+        # DOĞRU MOD10 HESAPLAMASI
         player_mod10 = sum(player_degerler) % 10
         banker_mod10 = sum(banker_degerler) % 10
         
-        # TOPLAM mod 10 değeri
+        # TOPLAM MOD10 DEĞERİ
         toplam_mod10 = player_mod10 + banker_mod10
 
         results = []
 
-        # 10.5+ SINYALİ: Oyuncu ve banker mod10 değerleri toplamı 11+ ise
+        # 10.5+ SINYALİ: SADECE toplam_mod10 >= 11 ise
         if toplam_mod10 >= 11:
             signal_color = extract_largest_value_suit(player_cards)
             if signal_color:
@@ -523,7 +522,7 @@ async def check_martingale_trackers():
             signal_won_this_step = len(player_kartlar) == 3
             print(f"🎯 3 kart sinyali kontrolü: {len(player_kartlar)} kart - Kazanç: {signal_won_this_step}")
             
-        # 10.5+ sinyali için özel kontrol - GÜNCELLENDİ
+        # 10.5+ sinyali için özel kontrol - ACİL DÜZELTME
         elif "10.5+" in reason:
             player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards_str)
             banker_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', banker_cards_str)
@@ -531,12 +530,12 @@ async def check_martingale_trackers():
             player_degerler = [get_baccarat_value(kart[0]) for kart in player_kartlar]
             banker_degerler = [get_baccarat_value(kart[0]) for kart in banker_kartlar]
             
-            # MOD 10 değerlerini hesapla
+            # DOĞRU MOD10 HESAPLAMASI
             player_mod10 = sum(player_degerler) % 10
             banker_mod10 = sum(banker_degerler) % 10
             toplam_mod10 = player_mod10 + banker_mod10
             
-            # YENİ KOŞUL: Mod 10 toplamı 11+ olmalı
+            # DOĞRU KOŞUL: Sadece mod10 toplamı 11+ ise kazanç
             signal_won_this_step = toplam_mod10 >= 11
             print(f"🎯 10.5+ sinyali kontrolü: Toplam:{toplam_mod10} (P:{player_mod10}+B:{banker_mod10}) - Kazanç: {signal_won_this_step}")
             
