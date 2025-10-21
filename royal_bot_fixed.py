@@ -45,7 +45,7 @@ C2_3_TYPES = {
 
 # 🚀 İSTEMCİ BAŞLATMA - HATA YÖNETİMİ İLE
 try:
-    client = TelegramClient('/root/0zctn/sansar_bot.session', API_ID, API_HASH)
+    client = TelegramClient('/root/0zctn/royal_bot_fixed.session', API_ID, API_HASH)
     client.start(bot_token=BOT_TOKEN)
     print("✅ Telegram istemcisi başarıyla başlatıldı!")
 except Exception as e:
