@@ -519,7 +519,15 @@ async def check_martingale_trackers():
         print(f"✅ Oyun #{game_to_check} SONUÇ BİLGİLERİ:")
         print(f"   - Oyuncu: {player_result} ({player_cards_str})")
         print(f"   - Banker: {banker_result} ({banker_cards_str})")
-        print(f"   - Toplam: {player_result + banker_result if player_result is not None and banker_result is not None else 'HESAPLANAMADI'}")
+        
+        # Eğer sonuç değerleri None ise, hesaplama yapma
+        if player_result is None or banker_result is None:
+            print(f"❌ Oyun #{game_to_check} için sonuç değerleri eksik. Oyuncu: {player_result}, Banker: {banker_result}")
+            # Hata durumunda kayıp olarak işaretle
+            signal_won_this_step = False
+        else:
+            toplam_sonuc = player_result + banker_result
+            print(f"   - Toplam: {toplam_sonuc}")
         
         reason = tracker_info['reason']
         
@@ -539,9 +547,11 @@ async def check_martingale_trackers():
                 print(f"🎯 10.5+ DEBUG - Sonuçlar: P{player_result} + B{banker_result} = {toplam_sonuc}")
                 print(f"🎯 10.5+ sinyali kontrolü: Toplam:{toplam_sonuc} - Kazanç: {signal_won_this_step}")
                 
-                # Eğer kazanç bekleniyorsa ama sistem kayıp gösteriyorsa
+                # HATA KONTROLÜ
                 if toplam_sonuc >= 11 and not signal_won_this_step:
                     print(f"🚨 HATA: Toplam {toplam_sonuc} >= 11 olmasına rağmen kazanç False!")
+                elif toplam_sonuc < 11 and signal_won_this_step:
+                    print(f"🚨 HATA: Toplam {toplam_sonuc} < 11 olmasına rağmen kazanç True!")
             else:
                 signal_won_this_step = False
                 print(f"❌ 10.5+ DEBUG - Sonuç değerleri eksik: P{player_result} B{banker_result}")
@@ -595,20 +605,22 @@ def extract_game_info_from_message(text):
             game_info['game_number'] = int(game_match.group(1))
             print(f"✅ Oyun numarası: #{game_info['game_number']}")
         
-        # Oyuncu sonucu ve kartları: örnek: "6 (4♦️A♣️A♠️)"
-        player_match = re.search(r'(\d+)\s+\((.*?)\)', text)
+        # Oyuncu sonucu ve kartları: örnek: "✅7 (4♦️3♣️)" 
+        player_match = re.search(r'([✅❌🔰])?(\d+)\s+\((.*?)\)', text)
         if player_match: 
-            game_info['player_result'] = int(player_match.group(1))
-            game_info['player_cards'] = player_match.group(2)
+            game_info['player_result'] = int(player_match.group(2))
+            game_info['player_cards'] = player_match.group(3)
             print(f"✅ Oyuncu sonucu: {game_info['player_result']}, kartları: {game_info['player_cards']}")
         
-        # Banker sonucu ve kartları: örnek: "🔰6 (K♣️6♦️)" - ✅, ❌, 🔰 olabilir
-        # Güncellenmiş regex: herhangi bir emoji ve ardından sayı
-        banker_match = re.search(r'[✅❌🔰](\d+)\s+\((.*?)\)', text)
-        if banker_match: 
-            game_info['banker_result'] = int(banker_match.group(1))
-            game_info['banker_cards'] = banker_match.group(2)
-            print(f"✅ Banker sonucu: {game_info['banker_result']}, kartları: {game_info['banker_cards']}")
+        # Banker sonucu ve kartları: örnek: "0 (8♠️2♥️K♥️)" 
+        # Banker kısmını bulmak için "-" işaretinden sonrasını ara
+        if ' - ' in text:
+            banker_part = text.split(' - ')[1]
+            banker_match = re.search(r'([✅❌🔰])?(\d+)\s+\((.*?)\)', banker_part)
+            if banker_match:
+                game_info['banker_result'] = int(banker_match.group(2))
+                game_info['banker_cards'] = banker_match.group(3)
+                print(f"✅ Banker sonucu: {game_info['banker_result']}, kartları: {game_info['banker_cards']}")
         
         for trigger_type, trigger_data in C2_3_TYPES.items():
             if trigger_type in text:
@@ -620,6 +632,10 @@ def extract_game_info_from_message(text):
             game_info['is_final'] = True
             print(f"✅ Final sonuç: Evet")
         
+        return game_info
+        
+    except Exception as e: 
+        print(f"❌ Oyun bilgisi çıkarma hatası: {e}")
         return game_info
         
     except Exception as e: 
