@@ -8,13 +8,13 @@ from collections import defaultdict, deque
 # 🔐 API BİLGİLERİ
 API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
-BOT_TOKEN = 'BURAYA_BOT_TOKENINI_YAPISTIR'  # 🔑 Buraya bot tokenınızı yazın
+BOT_TOKEN = ''  # 🔑 Buraya bot tokenınızı yazın
 KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@royalbaccfree"  # 📢 Hedef kanal
 ADMIN_ID = 1136442929  # 👑 Admin ID
 SISTEM_MODU = "normal_hibrit"
 GMT3 = pytz.timezone('Europe/Istanbul')
-client = TelegramClient('/root/0zctn/royal_bot.session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+client = TelegramClient('/root/0zctn/sansar_bot.session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 # 🎯 SİSTEM DEĞİŞKENLERİ
 game_results, martingale_trackers, color_trend, recent_games = {}, {}, [], []
