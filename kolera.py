@@ -512,7 +512,9 @@ async def check_martingale_trackers():
             
         player_cards_str = result_info['player_cards']
         banker_cards_str = result_info['banker_cards']
-        print(f"✅ Oyun #{game_to_check} sonuçlandı: P:{player_cards_str} B:{banker_cards_str}")
+        player_result = result_info.get('player_result')
+        banker_result = result_info.get('banker_result')
+        print(f"✅ Oyun #{game_to_check} sonuçlandı: P:{player_result} ({player_cards_str}) B:{banker_result} ({banker_cards_str})")
         
         reason = tracker_info['reason']
         
@@ -522,27 +524,18 @@ async def check_martingale_trackers():
             signal_won_this_step = len(player_kartlar) == 3
             print(f"🎯 3 kart sinyali kontrolü: {len(player_kartlar)} kart - Kazanç: {signal_won_this_step}")
             
-        # 10.5+ sinyali için özel kontrol - ACİL DÜZELTME
+        # 10.5+ sinyali için özel kontrol - GÜNCELLENDİ: sonuç değerlerini kullan
         elif "10.5+" in reason:
-            player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards_str)
-            banker_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', banker_cards_str)
-            
-            player_degerler = [get_baccarat_value(kart[0]) for kart in player_kartlar]
-            banker_degerler = [get_baccarat_value(kart[0]) for kart in banker_kartlar]
-            
-            # DOĞRU MOD10 HESAPLAMASI
-            player_mod10 = sum(player_degerler) % 10
-            banker_mod10 = sum(banker_degerler) % 10
-            toplam_mod10 = player_mod10 + banker_mod10
-            
-            # DOĞRU KOŞUL: Sadece mod10 toplamı 11+ ise kazanç
-            signal_won_this_step = toplam_mod10 >= 11
-            
-            # DETAYLI DEBUG
-            print(f"🎯 10.5+ DEBUG - Kartlar: P{player_cards_str} B{banker_cards_str}")
-            print(f"🎯 10.5+ DEBUG - Değerler: P{player_degerler}={sum(player_degerler)} B{banker_degerler}={sum(banker_degerler)}")
-            print(f"🎯 10.5+ DEBUG - Mod10: P{player_mod10} + B{banker_mod10} = {toplam_mod10}")
-            print(f"🎯 10.5+ sinyali kontrolü: Toplam:{toplam_mod10} - Kazanç: {signal_won_this_step}")
+            if player_result is not None and banker_result is not None:
+                toplam_sonuc = player_result + banker_result
+                signal_won_this_step = toplam_sonuc >= 11
+                
+                # DETAYLI DEBUG
+                print(f"🎯 10.5+ DEBUG - Sonuçlar: P{player_result} + B{banker_result} = {toplam_sonuc}")
+                print(f"🎯 10.5+ sinyali kontrolü: Toplam:{toplam_sonuc} - Kazanç: {signal_won_this_step}")
+            else:
+                signal_won_this_step = False
+                print(f"❌ 10.5+ DEBUG - Sonuç değerleri eksik: P{player_result} B{banker_result}")
             
         else:
             # Normal renk sinyali için renk kontrolü
@@ -584,7 +577,7 @@ async def check_martingale_trackers():
             print(f"🧹 Takipçi temizlendi: #{game_num_to_remove}")
 
 def extract_game_info_from_message(text):
-    game_info = {'game_number': None, 'player_cards': '', 'banker_cards': '', 'is_final': False, 'is_player_drawing': False, 'is_c2_3': False, 'c2_3_type': None, 'c2_3_description': ''}
+    game_info = {'game_number': None, 'player_cards': '', 'banker_cards': '', 'is_final': False, 'is_player_drawing': False, 'is_c2_3': False, 'c2_3_type': None, 'c2_3_description': '', 'player_result': None, 'banker_result': None}
     try:
         print(f"🔍 Oyun bilgisi çıkarılıyor: {text}")
         
@@ -593,15 +586,19 @@ def extract_game_info_from_message(text):
             game_info['game_number'] = int(game_match.group(1))
             print(f"✅ Oyun numarası: #{game_info['game_number']}")
         
-        player_match = re.search(r'\((.*?)\)', text)
+        # Oyuncu sonucu ve kartları: örnek: "1 (10♦️2♥️9♦️)"
+        player_match = re.search(r'(\d+)\s+\((.*?)\)', text)
         if player_match: 
-            game_info['player_cards'] = player_match.group(1)
-            print(f"✅ Oyuncu kartları: {game_info['player_cards']}")
+            game_info['player_result'] = int(player_match.group(1))
+            game_info['player_cards'] = player_match.group(2)
+            print(f"✅ Oyuncu sonucu: {game_info['player_result']}, kartları: {game_info['player_cards']}")
         
-        banker_match = re.search(r'\d+\s+\((.*?)\)', text)
+        # Banker sonucu ve kartları: örnek: "✅7 (3♣️4♦️)" - ✅ veya ❌ olabilir
+        banker_match = re.search(r'[✅❌](\d+)\s+\((.*?)\)', text)
         if banker_match: 
-            game_info['banker_cards'] = banker_match.group(1)
-            print(f"✅ Banker kartları: {game_info['banker_cards']}")
+            game_info['banker_result'] = int(banker_match.group(1))
+            game_info['banker_cards'] = banker_match.group(2)
+            print(f"✅ Banker sonucu: {game_info['banker_result']}, kartları: {game_info['banker_cards']}")
         
         for trigger_type, trigger_data in C2_3_TYPES.items():
             if trigger_type in text:
@@ -619,12 +616,51 @@ def extract_game_info_from_message(text):
         print(f"❌ Oyun bilgisi çıkarma hatası: {e}")
         return game_info
 
+def check_high_total_and_three_cards(game_info):
+    """
+    GÜNCELLENDİ: Mesajdaki sonuç değerlerini kullan
+    """
+    try:
+        player_result = game_info.get('player_result')
+        banker_result = game_info.get('banker_result')
+        player_cards = game_info.get('player_cards', '')
+
+        # Eğer sonuç değerleri yoksa, hesaplama yapmayalım
+        if player_result is None or banker_result is None:
+            return []
+
+        # TOPLAM sonuç değeri
+        toplam_sonuc = player_result + banker_result
+
+        results = []
+
+        # 10.5+ SINYALİ: Oyuncu ve banker sonuçlarının toplamı 11+ ise
+        if toplam_sonuc >= 11:
+            signal_color = extract_largest_value_suit(player_cards)
+            if signal_color:
+                results.append((signal_color, f"🔥 10.5+ ÇİFT YÜKSEK (Toplam:{toplam_sonuc})"))
+                print(f"✅ 10.5+ sinyali: {signal_color} - Toplam:{toplam_sonuc} (P:{player_result}+B:{banker_result})")
+
+        # 3 KART sinyali - bu hala kart sayısına bakacak
+        player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards)
+        if len(player_kartlar) == 3:
+            signal_color = extract_largest_value_suit(player_cards)
+            if signal_color:
+                results.append((signal_color, f"🎯 3 KARTLI OYUNCU (P:{player_result})"))
+                print(f"✅ 3 kart sinyali: {signal_color} - Oyuncu toplam:{player_result}")
+
+        return results
+
+    except Exception as e:
+        print(f"❌ check_high_total_and_three_cards hatası: {e}")
+        return []
+
 async def normal_hibrit_sistemi(game_info):
     trigger_game_num, c2_3_info = game_info['game_number'], {'c2_3_type': game_info.get('c2_3_type'), 'c2_3_description': game_info.get('c2_3_description')}
     print(f"🎯 Normal Hibrit analiz ediyor {c2_3_info['c2_3_description']}...")
 
     # Önce yeni özellikleri kontrol et (10.5+ ve 3 kart)
-    special_results = check_high_total_and_three_cards(game_info['player_cards'], game_info['banker_cards'])
+    special_results = check_high_total_and_three_cards(game_info)  # Değişti: game_info direkt geçildi
     
     # MOD KONTROLLERİ
     if SISTEM_MODU == "normal" or SISTEM_MODU == "10.5plus" or SISTEM_MODU == "3kart":
