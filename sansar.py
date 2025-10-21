@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 # 🔐 API BİLGİLERİ
 API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
-BOT_TOKEN = 'BURAYA_BOT_TOKENINI_YAPISTIR'  # 🔑 Buraya bot tokenınızı yazın
+BOT_TOKEN = ''  # 🔑 Buraya bot tokenınızı yazın
 KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@royalbaccfree"  # 📢 Hedef kanal
 ADMIN_ID = 1136442929  # 👑 Admin ID
@@ -45,7 +45,7 @@ C2_3_TYPES = {
 
 # 🚀 İSTEMCİ BAŞLATMA - HATA YÖNETİMİ İLE
 try:
-    client = TelegramClient('/root/0zctn/royal_bot.session', API_ID, API_HASH)
+    client = TelegramClient('/root/0zctn/sansar_bot.session', API_ID, API_HASH)
     client.start(bot_token=BOT_TOKEN)
     print("✅ Telegram istemcisi başarıyla başlatıldı!")
 except Exception as e:
