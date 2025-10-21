@@ -499,10 +499,18 @@ async def check_martingale_trackers():
         if not result_info['is_final']: continue
         player_cards_str = result_info['player_cards']
         
-        # TÜM sinyaller için normal renk kontrolü yap
-        signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
+        # ÖZEL SINYALLER İÇİN KAZANÇ KONTROLÜ
+        reason = tracker_info['reason']
+        if "10.5+" in reason or "3 KART" in reason:
+            # 10.5+ ve 3 kart sinyalleri için HER ZAMAN KAZANÇ
+            signal_won_this_step = True
+            print(f"🎯 Özel sinyal - Otomatik kazanç: {reason}")
+        else:
+            # Normal renk sinyali için renk kontrolü
+            signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
+            print(f"🎨 Renk sinyali kontrolü: {signal_suit} → {signal_won_this_step}")
         
-        print(f"🔍 Sinyal kontrol: #{signal_game_num} (Seviye {current_step}) → #{game_to_check} - Renk: {signal_suit} - Kazanç: {signal_won_this_step}")
+        print(f"🔍 Sinyal kontrol: #{signal_game_num} (Seviye {current_step}) → #{game_to_check} - Kazanç: {signal_won_this_step}")
         
         if signal_won_this_step:
             result_details = f"#{game_to_check} ✅ Kazanç - {current_step}. seviye"
