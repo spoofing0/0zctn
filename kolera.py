@@ -105,7 +105,8 @@ def analyze_simple_pattern(player_cards, banker_cards, game_number):
 
 def check_high_total_and_three_cards(player_cards, banker_cards):
     """
-    GÜNCELLENDİ: 10.5+ sinyali için koşul değişti
+    GÜNCELLENDİ: 10.5+ sinyali için doğru mantık
+    - Oyuncu ve bankerin mod 10 değerleri toplamı >= 11
     """
     try:
         player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards)
@@ -114,27 +115,28 @@ def check_high_total_and_three_cards(player_cards, banker_cards):
         player_degerler = [get_baccarat_value(kart[0]) for kart in player_kartlar]
         banker_degerler = [get_baccarat_value(kart[0]) for kart in banker_kartlar]
 
-        player_toplam = sum(player_degerler)
-        banker_toplam = sum(banker_degerler)
+        # MOD 10 değerlerini hesapla
+        player_mod10 = sum(player_degerler) % 10
+        banker_mod10 = sum(banker_degerler) % 10
         
-        # TOPLAM değeri hesapla (oyuncu + banker)
-        toplam_deger = player_toplam + banker_toplam
+        # TOPLAM mod 10 değeri
+        toplam_mod10 = player_mod10 + banker_mod10
 
         results = []
 
-        # 10.5+ SINYALİ: Oyuncu + Banker toplamı 11+ ise (DEĞİŞTİ)
-        if toplam_deger >= 11:
+        # 10.5+ SINYALİ: Oyuncu ve banker mod10 değerleri toplamı 11+ ise
+        if toplam_mod10 >= 11:
             signal_color = extract_largest_value_suit(player_cards)
             if signal_color:
-                results.append((signal_color, f"🔥 10.5+ ÇİFT YÜKSEK (Toplam:{toplam_deger})"))
-                print(f"✅ 10.5+ sinyali: {signal_color} - Toplam:{toplam_deger} (P:{player_toplam}+B:{banker_toplam})")
+                results.append((signal_color, f"🔥 10.5+ ÇİFT YÜKSEK (Toplam:{toplam_mod10})"))
+                print(f"✅ 10.5+ sinyali: {signal_color} - Toplam:{toplam_mod10} (P:{player_mod10}+B:{banker_mod10})")
 
-        # 3 KART sinyali (değişmedi)
+        # 3 KART sinyali
         if len(player_kartlar) == 3:
             signal_color = extract_largest_value_suit(player_cards)
             if signal_color:
-                results.append((signal_color, f"🎯 3 KARTLI OYUNCU (P:{player_toplam})"))
-                print(f"✅ 3 kart sinyali: {signal_color} - Oyuncu toplam:{player_toplam}")
+                results.append((signal_color, f"🎯 3 KARTLI OYUNCU (P:{player_mod10})"))
+                print(f"✅ 3 kart sinyali: {signal_color} - Oyuncu toplam:{player_mod10}")
 
         return results
 
@@ -500,7 +502,6 @@ async def check_martingale_trackers():
         
         print(f"🔍 Takipçi kontrol: #{signal_game_num} -> #{game_to_check} (Seviye {current_step}) - Sebep: {tracker_info['reason']}")
         
-        # Oyun sonucu var mı kontrol et
         if game_to_check not in game_results:
             print(f"❌ Oyun #{game_to_check} henüz sonuçlanmamış veya kayıtlı değil.")
             continue
@@ -511,31 +512,33 @@ async def check_martingale_trackers():
             continue
             
         player_cards_str = result_info['player_cards']
-        print(f"✅ Oyun #{game_to_check} sonuçlandı: {player_cards_str}")
+        banker_cards_str = result_info['banker_cards']
+        print(f"✅ Oyun #{game_to_check} sonuçlandı: P:{player_cards_str} B:{banker_cards_str}")
         
-        # ÖZEL SINYALLER İÇİN KAZANÇ KONTROLÜ - GÜNCELLENDİ
         reason = tracker_info['reason']
         
         # 3 KART sinyali için özel kontrol
         if "3 KART" in reason:
-            # Oyuncunun gerçekten 3 kart açıp açmadığını kontrol et
             player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards_str)
             signal_won_this_step = len(player_kartlar) == 3
             print(f"🎯 3 kart sinyali kontrolü: {len(player_kartlar)} kart - Kazanç: {signal_won_this_step}")
             
-        # 10.5+ sinyali için özel kontrol
+        # 10.5+ sinyali için özel kontrol - GÜNCELLENDİ
         elif "10.5+" in reason:
             player_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards_str)
-            banker_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', result_info['banker_cards'])
+            banker_kartlar = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', banker_cards_str)
             
             player_degerler = [get_baccarat_value(kart[0]) for kart in player_kartlar]
             banker_degerler = [get_baccarat_value(kart[0]) for kart in banker_kartlar]
             
-            player_toplam = sum(player_degerler)
-            banker_toplam = sum(banker_degerler)
+            # MOD 10 değerlerini hesapla
+            player_mod10 = sum(player_degerler) % 10
+            banker_mod10 = sum(banker_degerler) % 10
+            toplam_mod10 = player_mod10 + banker_mod10
             
-            signal_won_this_step = player_toplam >= 11 and banker_toplam >= 11
-            print(f"🎯 10.5+ sinyali kontrolü: P:{player_toplam} B:{banker_toplam} - Kazanç: {signal_won_this_step}")
+            # YENİ KOŞUL: Mod 10 toplamı 11+ olmalı
+            signal_won_this_step = toplam_mod10 >= 11
+            print(f"🎯 10.5+ sinyali kontrolü: Toplam:{toplam_mod10} (P:{player_mod10}+B:{banker_mod10}) - Kazanç: {signal_won_this_step}")
             
         else:
             # Normal renk sinyali için renk kontrolü
@@ -571,7 +574,6 @@ async def check_martingale_trackers():
                 if len(recent_games) > 20: recent_games.pop(0)
                 print(f"💔 Sinyal #{signal_game_num} KAYBETTİ! Son seviye: {current_step}")
     
-    # Tamamlanan takipçileri temizle
     for game_num_to_remove in trackers_to_remove:
         if game_num_to_remove in martingale_trackers: 
             del martingale_trackers[game_num_to_remove]
