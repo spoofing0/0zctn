@@ -7,7 +7,7 @@ from collections import defaultdict, deque
 
 API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
-BOT_TOKEN = 'BURAYA_BOT_TOKENINI_YAPISTIR'  # 🔑 Buraya bot tokenınızı yazın
+BOT_TOKEN = ''  # 🔑 Buraya bot tokenınızı yazın
 KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@royalbaccfree"  # 📢 Hedef kanal
 ADMIN_ID = 1136442929  # 👑 Admin ID
