@@ -17,7 +17,7 @@ KANAL_HEDEF = "@royalbaccfree"  # 📢 Hedef kanal
 ADMIN_ID = 1136442929  # 👑 Admin ID
 SISTEM_MODU = "normal_hibrit"
 GMT3 = pytz.timezone('Europe/Istanbul')
-client = TelegramClient('royal_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+client = TelegramClient('kolera_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 game_results, martingale_trackers, color_trend, recent_games = {}, {}, [], []
 MAX_MARTINGALE_STEPS, MAX_GAME_NUMBER, is_signal_active, daily_signal_count = 3, 1440, False, 0
