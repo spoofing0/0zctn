@@ -874,7 +874,7 @@ async def handle_yardim(event):
     await event.reply(yardim_mesaji)
 
 # CLIENT TANIMLAMA
-client = TelegramClient('royal_bot', API_ID, API_HASH)
+client = TelegramClient('kolera_bot', API_ID, API_HASH)
 
 if __name__ == '__main__':
     print("🤖 ROYAL BACCARAT BOT BAŞLIYOR...")
