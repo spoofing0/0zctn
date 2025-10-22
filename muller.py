@@ -15,11 +15,11 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/royal_bot.log'),
+        logging.FileHandler('/var/log/muller_bot.log'),
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('RoyalBot')
+logger = logging.getLogger('MullerBot')
 
 # Config değişkenleri
 API_ID = 29581698
@@ -32,7 +32,7 @@ SISTEM_MODU = "normal_hibrit"
 GMT3 = pytz.timezone('Europe/Istanbul')
 
 # CLIENT TANIMI - EN BAŞTA
-client = TelegramClient('/root/0zctn/royal_bot_session', API_ID, API_HASH)
+client = TelegramClient('/root/0zctn/muller_bot_session', API_ID, API_HASH)
 
 # Global değişkenler
 game_results, martingale_trackers, color_trend, recent_games = {}, {}, [], []
