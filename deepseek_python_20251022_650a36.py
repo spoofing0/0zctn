@@ -15,16 +15,16 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/royal_bot.log'),
+        logging.FileHandler('/var/log/kezzap_bot.log'),
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('RoyalBot')
+logger = logging.getLogger('KezzapBot')
 
 # Config değişkenleri
 API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
-BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE'  # 🔑 BURAYA BOT TOKEN'INI YAZ!
+BOT_TOKEN = ''  # 🔑 BURAYA BOT TOKEN'INI YAZ!
 KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@royalbaccfree"
 ADMIN_ID = 1136442929
@@ -35,14 +35,14 @@ GMT3 = pytz.timezone('Europe/Istanbul')
 DEBUG = True
 
 # CLIENT TANIMI
-client = TelegramClient('/root/0zctn/royal_bot_session', API_ID, API_HASH)
+client = TelegramClient('/root/0zctn/kezzap_bot_session', API_ID, API_HASH)
 
 # Global değişkenler
 game_results, martingale_trackers, color_trend, recent_games = {}, {}, [], []
 MAX_MARTINGALE_STEPS, MAX_GAME_NUMBER, is_signal_active, daily_signal_count = 3, 1440, False, 0
 
 # Excel dosyası
-EXCEL_FILE = "/root/0zctn/royal_baccarat_data.xlsx"
+EXCEL_FILE = "/root/0zctn/kezzap_data.xlsx"
 
 # C2_3 Tipleri
 C2_3_TYPES = {
