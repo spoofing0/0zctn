@@ -15,11 +15,11 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/kolera_bot.log'),
+        logging.FileHandler('/var/log/bossy_bot.log'),
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('KoleraBot')
+logger = logging.getLogger('BossyBot')
 
 # Config değişkenleri
 API_ID = 29581698
@@ -32,14 +32,14 @@ SISTEM_MODU = "normal_hibrit"
 GMT3 = pytz.timezone('Europe/Istanbul')
 
 # CLIENT TANIMI - EN BAŞTA
-client = TelegramClient('kolera_bot', API_ID, API_HASH)
+client = TelegramClient('bossy_bot', API_ID, API_HASH)
 
 # Global değişkenler
 game_results, martingale_trackers, color_trend, recent_games = {}, {}, [], []
 MAX_MARTINGALE_STEPS, MAX_GAME_NUMBER, is_signal_active, daily_signal_count = 3, 1440, False, 0
 
 # Excel dosyası
-EXCEL_FILE = "/root/0zctn/royal_baccarat_data.xlsx"
+EXCEL_FILE = "/root/0zctn/bossy_data.xlsx"
 RED_FILL = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 BLUE_FILL = PatternFill(start_color="0000FF", end_color="0000FF", fill_type="solid")
 GREEN_FILL = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
