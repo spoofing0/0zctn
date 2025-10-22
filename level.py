@@ -15,11 +15,11 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/royal_bot.log'),
+        logging.FileHandler('/var/log/level_bot.log'),
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('RoyalBot')
+logger = logging.getLogger('LevelBot')
 
 # Config değişkenleri
 API_ID = 29581698
@@ -35,14 +35,14 @@ GMT3 = pytz.timezone('Europe/Istanbul')
 DEBUG = True
 
 # CLIENT TANIMI
-client = TelegramClient('/root/0zctn/royal_bot_session', API_ID, API_HASH)
+client = TelegramClient('/root/0zctn/level_session', API_ID, API_HASH)
 
 # Global değişkenler
 game_results, martingale_trackers, color_trend, recent_games = {}, {}, [], []
 MAX_MARTINGALE_STEPS, MAX_GAME_NUMBER, is_signal_active, daily_signal_count = 3, 1440, False, 0
 
 # Excel dosyası
-EXCEL_FILE = "/root/0zctn/royal_baccarat_data.xlsx"
+EXCEL_FILE = "/root/0zctn/level_data.xlsx"
 
 # C2_3 Tipleri
 C2_3_TYPES = {
