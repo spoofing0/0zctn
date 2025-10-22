@@ -575,9 +575,9 @@ game_info = {
     'player_cards': player_match.group(1),
     'banker_cards': banker_match.group(1) if banker_match else '',
     'is_final': True,
-    'is_c2_3': any(trigger in text for trigger in C2_3_TYPES.keys()),  # BU SATIRI DEĞİŞTİR
-    'c2_3_type': next((trigger for trigger in C2_3_TYPES.keys() if trigger in text), '#C2_3'),
-    'c2_3_description': C2_3_TYPES.get(next((trigger for trigger in C2_3_TYPES.keys() if trigger in text), '#C2_3'), {}).get('name', 'KLASİK')
+    'is_c2_3': True,  # 🔥 HER ZAMAN TRUE
+    'c2_3_type': '#C2_3',  # 🔥 VARSAYILAN
+    'c2_3_description': 'KLASİK'  # 🔥 VARSAYILAN
 }
             
             debug_log(f"🎮 Oyun bilgisi: #{game_info['game_number']}, C2: {game_info['is_c2_3']}")
