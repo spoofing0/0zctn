@@ -196,7 +196,6 @@ async def save_game_result_to_excel(game_info):
 
 # SONUÇ TAKİP SİSTEMİ
 async def check_and_update_signal_results():
-    """Aktif sinyallerin sonuçlarını kontrol et ve güncelle"""
     global is_signal_active, martingale_trackers
     
     try:
