@@ -15,11 +15,11 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/var/log/royal_bot.log'),
+        logging.FileHandler('/var/log/kolera_bot.log'),
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('RoyalBot')
+logger = logging.getLogger('KoleraBot')
 
 API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
