@@ -360,18 +360,78 @@ async def excel_tahmin_sistemi(game_info):
     performance_stats['excel_stats']['total'] += 1
 
 # EXCEL SİNYAL GÜNCELLEME
-async def update_excel_signal(tracker_info, result_type, current_step=None):
-    """Excel sinyalini güncelle"""
+async def update_signal_message(tracker_info, result_type, current_step=None, result_details=None):
+    # 🆕 EXCEL'E KAZANÇ/KAYIP KAYDET - BAŞA EKLE
+    if result_type in ['win', 'loss']:
+        try:
+            signal_game_num = tracker_info['sent_game_number']
+            signal_suit = tracker_info['signal_suit']
+            
+            # Oyun bilgilerini al
+            game_info = game_results.get(signal_game_num, {})
+            if not game_info:
+                # Eğer game_results'ta yoksa, temel bilgileri oluştur
+                game_info = {
+                    'game_number': signal_game_num,
+                    'player_cards': '',
+                    'banker_cards': ''
+                }
+            
+            # Kazanç/Kayıp bilgisini hazırla
+            result_text = 'KAZANÇ' if result_type == 'win' else 'KAYIP'
+            # Profit hesapla: win ise +1, loss ise martingale kaybı
+            profit = 1 if result_type == 'win' else -(2**current_step - 1) if current_step else -1
+            
+            # Excel'e kaydet
+            save_to_excel(game_info, signal_suit, result_text, current_step, profit)
+            print(f"💾 Excel'e {result_text} kaydedildi: #{signal_game_num}")
+            
+        except Exception as e:
+            print(f"❌ Excel kazanç/kayıp kaydetme hatası: {e}")
+    
     try:
+        signal_game_num, signal_suit = tracker_info['sent_game_number'], tracker_info['signal_suit']
+        suit_display, message_obj, reason = get_suit_display_name(signal_suit), tracker_info['message_obj'], tracker_info.get('reason', '')
+        c2_3_type = tracker_info.get('c2_3_type', '#C2_3')
+        is_excel_signal = tracker_info.get('is_excel', False)
+        
+        pattern_type = None
+        for pattern in pattern_stats.keys():
+            if pattern in reason:
+                pattern_type = pattern
+                break
+        
+        duration = datetime.now(GMT3) - tracker_info['start_time']
+        duration_str = f"{duration.seconds // 60}d {duration.seconds % 60}s"
+        gmt3_time = datetime.now(GMT3).strftime('%H:%M:%S')
+        
+        if result_details: 
+            tracker_info['results'].append(result_details)
+        
         if result_type == 'win':
-            performance_stats['excel_stats']['wins'] += 1
-            performance_stats['excel_stats']['profit'] += 1
+            new_text = f"✅ **KAZANÇ** ✅\n#N{signal_game_num} - {suit_display}\n📊 Sebep: {reason}\n🎯 Seviye: {current_step if current_step else 0}. Seviye\n⏱️ Süre: {duration_str}\n🕒 Bitiş: {gmt3_time}\n🏆 **SONUÇ: KAZANDINIZ!**"
+            update_performance_stats('win', current_step if current_step else 0, c2_3_type, pattern_type)
+            if is_excel_signal:
+                await update_excel_signal(tracker_info, 'win', current_step)
         elif result_type == 'loss':
-            performance_stats['excel_stats']['losses'] += 1
-            performance_stats['excel_stats']['profit'] -= (2**current_step - 1) if current_step else 1
-    except Exception as e:
-        print(f"❌ Excel istatistik güncelleme hatası: {e}")
-
+            new_text = f"❌ **KAYIP** ❌\n#N{signal_game_num} - {suit_display}\n📊 Sebep: {reason}\n🎯 Seviye: {current_step if current_step else MAX_MARTINGALE_STEPS}. Seviye\n⏱️ Süre: {duration_str}\n🕒 Bitiş: {gmt3_time}\n💔 **SONUÇ: KAYBETTİNİZ**"
+            update_performance_stats('loss', current_step if current_step else MAX_MARTINGALE_STEPS, c2_3_type, pattern_type)
+            if is_excel_signal:
+                await update_excel_signal(tracker_info, 'loss', current_step)
+        elif result_type == 'progress':
+            step_details = f"{current_step}. seviye → #{tracker_info['expected_game_number_for_check']}"
+            results_history = "\n".join([f"• {r}" for r in tracker_info['results']]) if tracker_info['results'] else "• İlk deneme"
+            new_text = f"🔄 **MARTINGALE İLERLİYOR** 🔄\n#N{signal_game_num} - {suit_display}\n📊 Sebep: {reason}\n🎯 Adım: {step_details}\n⏱️ Süre: {duration_str}\n🕒 Son Güncelleme: {gmt3_time}\n📈 Geçmiş:\n{results_history}\n🎲 **SONRAKİ: #{tracker_info['expected_game_number_for_check']}**"
+        elif result_type == 'step_result':
+            new_text = f"📊 **ADIM SONUCU** 📊\n#N{signal_game_num} - {suit_display}\n🎯 Adım: {current_step}. seviye\n📋 Sonuç: {result_details}\n⏱️ Süre: {duration_str}\n🕒 Zaman: {gmt3_time}\n🔄 **DEVAM EDİYOR...**"
+        
+        await message_obj.edit(new_text)
+        print(f"✏️ Sinyal güncellendi: #{signal_game_num} - {result_type}")
+    except MessageNotModifiedError: 
+        pass
+    except Exception as e: 
+        print(f"❌ Mesaj düzenleme hatası: {e}")
+        
 # DİĞER GEREKLİ FONKSİYONLAR
 def update_performance_stats(result_type, steps=0, c2_3_type=None, pattern_type=None):
     today = datetime.now(GMT3).strftime('%Y-%m-%d')
