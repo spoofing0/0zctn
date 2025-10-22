@@ -570,15 +570,15 @@ async def handle_source_channel_message(event):
             
             debug_log(f"🎮 Oyun #{game_number} - Player: {player_cards}, Banker: {banker_cards}")
             
-            game_info = {
-                'game_number': game_number,
-                'player_cards': player_cards,
-                'banker_cards': banker_cards,
-                'is_final': True,
-                'is_c2_3': any(trigger in text for trigger in C2_3_TYPES.keys()),
-                'c2_3_type': next((trigger for trigger in C2_3_TYPES.keys() if trigger in text), '#C2_3'),
-                'c2_3_description': C2_3_TYPES.get(next((trigger for trigger in C2_3_TYPES.keys() if trigger in text), '#C2_3'), {}).get('name', 'KLASİK')
-            }
+game_info = {
+    'game_number': int(game_match.group(1)),
+    'player_cards': player_match.group(1),
+    'banker_cards': banker_match.group(1) if banker_match else '',
+    'is_final': True,
+    'is_c2_3': any(trigger in text for trigger in C2_3_TYPES.keys()),  # BU SATIRI DEĞİŞTİR
+    'c2_3_type': next((trigger for trigger in C2_3_TYPES.keys() if trigger in text), '#C2_3'),
+    'c2_3_description': C2_3_TYPES.get(next((trigger for trigger in C2_3_TYPES.keys() if trigger in text), '#C2_3'), {}).get('name', 'KLASİK')
+}
             
             debug_log(f"🎮 Oyun bilgisi: #{game_info['game_number']}, C2: {game_info['is_c2_3']}")
             
