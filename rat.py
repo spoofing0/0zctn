@@ -22,8 +22,8 @@ client = TelegramClient('rat_bot', API_ID, API_HASH)
 # ==============================================================================
 game_results = {}
 martingale_trackers = {}
-watched_incomplete = {}  # Tamamlanmamış oyunları takip etmek için
-MAX_MARTINGALE_STEPS = 2  # 3 adım (0,1,2)
+watched_incomplete = {}
+MAX_MARTINGALE_STEPS = 2
 MAX_GAME_NUMBER = 1440
 is_signal_active = False
 
@@ -42,20 +42,16 @@ performance_stats = {
 STRONG_PATTERNS = ['#C2_3', '#C3_2', '#C3_3']
 
 def is_arrow_on_player_side(text):
-    """Okun hangi tarafta olduğunu tespit eder"""
     try:
-        # 👉 işaretinin konumuna göre tarafları belirle
         if '👉' not in text:
             return False, False
             
-        # Parantezleri kullanarak oyuncu ve banker bölümlerini ayır
         parts = re.split(r'[()]', text)
         if len(parts) < 3:
             return False, False
             
-        # İlk parantez içi oyuncu, ikinci parantez içi banker
-        player_section = parts[0] + parts[1]  # Oyuncu bölümü
-        banker_section = parts[2]  # Banker bölümü
+        player_section = parts[0] + parts[1]
+        banker_section = parts[2]
         
         arrow_player = '👉' in player_section
         arrow_banker = '👉' in banker_section
@@ -66,15 +62,12 @@ def is_arrow_on_player_side(text):
         return False, False
 
 def extract_player_suits(text):
-    """Oyuncu kartlarındaki suit'leri çıkarır"""
     try:
-        # İlk parantez içindeki oyuncu kartlarını al
         player_match = re.search(r'\((.*?)\)', text)
         if not player_match:
             return []
         
         player_cards = player_match.group(1)
-        # Kartlardaki suit'leri bul (emoji karakterleri)
         suits = re.findall(r'[♣♦♥♠]', player_cards)
         return suits
     except Exception as e:
@@ -93,7 +86,6 @@ def get_next_game_number(current_game_num):
 
 def extract_largest_value_suit(cards_str):
     try:
-        # Kartları ve suit'leri ayır
         cards = re.findall(r'(\d+|[A-Z])([♣♦♥♠])', cards_str)
         if not cards or len(cards) < 2: 
             return None
@@ -102,7 +94,6 @@ def extract_largest_value_suit(cards_str):
         largest_value_suit = None
         values = [get_baccarat_value(card[0]) for card in cards]
         
-        # Eğer tüm değerler 0 ise (A, K, Q, J, 2, T)
         if all(v == 0 for v in values):
             return None
 
@@ -145,20 +136,18 @@ def extract_game_info_from_message(text):
         game_info['arrow_on_player'] = arrow_player
         game_info['arrow_on_banker'] = arrow_banker
 
-        # Oyun bilgilerini çıkar - GELİŞMİŞ REGEX
-        # Oyuncu kartları: ilk parantez içi
+        # Oyun bilgilerini çıkar
         player_match = re.search(r'\((.*?)\)', text)
         if player_match:
             game_info['player_cards'] = player_match.group(1)
             print(f"🎴 Oyuncu kartları: {game_info['player_cards']}")
 
-        # Banker kartları: ikinci parantez içi (varsa)
         banker_match = re.search(r'\((.*?)\)', text[text.find(')')+1:] if ')' in text else text)
         if banker_match:
             game_info['banker_cards'] = banker_match.group(1)
             print(f"🎴 Banker kartları: {game_info['banker_cards']}")
 
-        # Final kontrolü - ok banker tarafındaysa veya diğer işaretler varsa
+        # Final kontrolü
         if any(indicator in text for indicator in ['✅', '🔰', '#X']) or arrow_banker:
             game_info['is_final'] = True
             print(f"🏁 Final sonucu: {game_info['is_final']}")
@@ -169,7 +158,6 @@ def extract_game_info_from_message(text):
         return game_info
 
 async def process_bet(game_num, msg, suits):
-    """Yeni sisteme göre bahis işleme"""
     global is_signal_active, performance_stats
     
     if performance_stats['consecutive_losses'] >= 3:
