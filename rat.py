@@ -12,7 +12,7 @@ API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
 
 # --- Kanal Bilgileri ---
-source_channel = -1001626824569  # Bu satırı ekledim
+KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@royalbaccfree"
 
 client = TelegramClient('rat_bot', API_ID, API_HASH)
@@ -49,14 +49,13 @@ def is_arrow_on_player_side(text):
         if '👉' not in text:
             return False, False
             
-        # Basit yaklaşım: 👉 işaretinin konumuna göre belirle
         arrow_index = text.find('👉')
         first_paren = text.find('(')
         
         if arrow_index < first_paren:
-            return True, False  # 👉 ilk parantezden önce = oyuncu tarafında
+            return True, False
         else:
-            return False, True  # 👉 ilk parantezden sonra = banker tarafında
+            return False, True
     except Exception as e:
         print(f"Ok tespit hatası: {e}")
         return False, False
@@ -112,29 +111,24 @@ def extract_game_info_from_message(text):
     game_info = {
         'game_number': None, 'player_cards': '', 'banker_cards': '',
         'is_final': False, 'patterns': [], 'pattern_strength': 0,
-        'arrow_on_player': False, 'arrow_on_banker': False,
-        'raw_text': text
+        'arrow_on_player': False, 'arrow_on_banker': False
     }
     
     try:
-        # Oyun numarasını çıkar
         games = [int(m1 or m2 or m3) for m1, m2, m3 in re.findall(game_number_pattern, text)]
         game_num = games[0] if games else 0
         
         if game_num:
             game_info['game_number'] = game_num
 
-        # Pattern tespiti
         detected_patterns = [p for p in STRONG_PATTERNS if p in text]
         game_info['patterns'] = detected_patterns
         game_info['pattern_strength'] = len(detected_patterns) * 3
 
-        # Ok tespiti
         arrow_player, arrow_banker = is_arrow_on_player_side(text)
         game_info['arrow_on_player'] = arrow_player
         game_info['arrow_on_banker'] = arrow_banker
 
-        # Oyun bilgilerini çıkar
         player_match = re.search(r'\((.*?)\)', text)
         if player_match:
             game_info['player_cards'] = player_match.group(1)
@@ -143,7 +137,6 @@ def extract_game_info_from_message(text):
         if banker_match:
             game_info['banker_cards'] = banker_match.group(1)
 
-        # Final kontrolü
         if any(indicator in text for indicator in ['✅', '🔰', '#X']) or arrow_banker:
             game_info['is_final'] = True
         
@@ -309,9 +302,9 @@ async def on_message_edited(event):
                 del watched_incomplete[msg.id]
                 print(f"[EDIT] ✅ #N{game_num} banker tarafına geçti → sonuç işlendi.")
 
-# Tüm mesajları game_results'a kaydetmek için
+# Tüm mesajları game_results'a kaydet
 @client.on(events.NewMessage(chats=source_channel))
-@client.on(events.MessageEdited(chats=source_channel))
+@client.on(events.MessageEdited(chats=source_channel)) 
 async def handle_all_messages(event):
     msg = event.message
     if not msg.text:
@@ -325,68 +318,26 @@ async def handle_all_messages(event):
 # Telegram Komutları
 @client.on(events.NewMessage(pattern='/start'))
 async def start_command(event):
-    await event.reply("""
-🤖 **Baccarat Bot Aktif** 🎰
-Komutlar: /start, /help, /stats, /status, /patterns, /active, /analysis
-Strateji: 3 adım Martingale + Sadece güçlü patternler
-""")
+    await event.reply("🤖 Baccarat Bot Aktif")
 
 @client.on(events.NewMessage(pattern='/stats'))
 async def stats_command(event):
     total = performance_stats['wins'] + performance_stats['losses']
     win_rate = (performance_stats['wins'] / total * 100) if total > 0 else 0
     await event.reply(f"""
-📊 **İstatistikler:**
+📊 İstatistikler:
 Sinyal: {performance_stats['total_signals']}
 Kazanç: {performance_stats['wins']} | Kayıp: {performance_stats['losses']}
-Oran: {win_rate:.1f}%
-Ardışık Kayıp: {performance_stats['consecutive_losses']}
-""")
-
-@client.on(events.NewMessage(pattern='/analysis'))
-async def analysis_command(event):
-    status = "🔴 DURDURULDU" if performance_stats['consecutive_losses'] >= 3 else "🟢 AKTİF"
-    await event.reply(f"""
-📈 **Analiz:**
-Durum: {status}
-Ardışık Kayıp: {performance_stats['consecutive_losses']}/3
-Max Kayıp: {performance_stats['max_consecutive_losses']}
-Son Sinyal: {performance_stats['last_signal'] or 'Yok'}
-""")
+Oran: {win_rate:.1f}%""")
 
 @client.on(events.NewMessage(pattern='/status'))
 async def status_command(event):
     await event.reply(f"""
-🟢 **Bot Çalışıyor**
+🟢 Bot Çalışıyor
 Aktif Sinyal: {'✅' if is_signal_active else '❌'}
-Takip: {len(martingale_trackers)} sinyal
-Ardışık Kayıp: {performance_stats['consecutive_losses']}
-""")
-
-@client.on(events.NewMessage(pattern='/patterns'))
-async def patterns_command(event):
-    await event.reply("""
-🎯 **Aktif Patternler:**
-#C2_3, #C3_2, #C3_3
-""")
-
-@client.on(events.NewMessage(pattern='/active'))
-async def active_command(event):
-    if performance_stats['consecutive_losses'] >= 3:
-        await event.reply("🔴 SİSTEM DURDURULDU - 3+ ardışık kayıp")
-    elif is_signal_active:
-        active_list = "\n".join([f"#N{num} - {t['signal_suit']} (Adım {t['step']})" for num, t in martingale_trackers.items()])
-        await event.reply(f"🔴 AKTİF SİNYAL:\n{active_list}")
-    else:
-        await event.reply("🟢 Aktif sinyal yok")
+Takip: {len(martingale_trackers)} sinyal""")
 
 if __name__ == '__main__':
     print("🤖 Baccarat Bot Başlatılıyor...")
-    print("📡 Kanallar:")
-    print(f"   Kaynak: {source_channel}")
-    print(f"   Hedef: {KANAL_HEDEF}")
-    print("🎯 Patternler: #C2_3, #C3_2, #C3_3")
-    print("⚡ Martingale: 3 adım")
-    
     with client:
         client.run_until_disconnected()
