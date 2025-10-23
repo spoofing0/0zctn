@@ -43,19 +43,25 @@ STRONG_PATTERNS = ['#C2_3', '#C3_2', '#C3_3']
 
 def is_arrow_on_player_side(text):
     try:
-        if '👉' not in text:
+        # Basitçe: 👉 işareti ilk parantezden önceyse oyuncu tarafında, ikinci parantezden önceyse banker tarafında.
+        # Önce parantezleri bul
+        player_start = text.find('(')
+        banker_start = text.find('(', player_start+1)  # İkinci parantez
+
+        if player_start == -1:
             return False, False
-            
-        parts = re.split(r'[()]', text)
-        if len(parts) < 3:
-            return False, False
-            
-        player_section = parts[0] + parts[1]
-        banker_section = parts[2]
-        
-        arrow_player = '👉' in player_section
-        arrow_banker = '👉' in banker_section
-        
+
+        # İlk parantezden önce 👉 var mı?
+        arrow_player = '👉' in text[:player_start]
+        # İkinci parantezden önce 👉 var mı?
+        arrow_banker = False
+        if banker_start != -1:
+            arrow_banker = '👉' in text[player_start+1:banker_start]
+        else:
+            # Eğer ikinci parantez yoksa, ilk parantezden sonraki kısımda banker tarafı olabilir.
+            # Ancak genellikle ikinci parantez var.
+            pass
+
         return arrow_player, arrow_banker
     except Exception as e:
         print(f"Ok tespit hatası: {e}")
@@ -118,12 +124,16 @@ def extract_game_info_from_message(text):
     
     try:
         # Oyun numarasını çıkar - TÜM FORMATLARI DENE
-        game_num_match = re.search(r'#N(\d+)', text)
-        if not game_num_match:
-            game_num_match = re.search(r'No\s*:\s*(\d+)', text)
-        
+        # № karakteri için Unicode: \u2116
+        game_num_match = re.search(r'#N(\d+)|No\s*:\s*(\d+)|\u2116(\d+)', text)
         if game_num_match:
-            game_info['game_number'] = int(game_num_match.group(1))
+            # Hangi grup yakaladı?
+            if game_num_match.group(1):
+                game_info['game_number'] = int(game_num_match.group(1))
+            elif game_num_match.group(2):
+                game_info['game_number'] = int(game_num_match.group(2))
+            elif game_num_match.group(3):
+                game_info['game_number'] = int(game_num_match.group(3))
             print(f"🔢 Oyun numarası bulundu: #{game_info['game_number']}")
 
         # Pattern tespiti
@@ -283,12 +293,14 @@ async def on_new_message(event):
     try:
         # Oyun numarasını bul - TÜM FORMATLARI DENE
         game_num = 0
-        game_num_match = re.search(r'#N(\d+)', msg.text)
-        if not game_num_match:
-            game_num_match = re.search(r'No\s*:\s*(\d+)', msg.text)
-        
+        game_num_match = re.search(r'#N(\d+)|No\s*:\s*(\d+)|\u2116(\d+)', msg.text)
         if game_num_match:
-            game_num = int(game_num_match.group(1))
+            if game_num_match.group(1):
+                game_num = int(game_num_match.group(1))
+            elif game_num_match.group(2):
+                game_num = int(game_num_match.group(2))
+            elif game_num_match.group(3):
+                game_num = int(game_num_match.group(3))
             print(f"🔢 Oyun #{game_num} bulundu")
         else:
             print("❌ Oyun numarası bulunamadı")
@@ -341,12 +353,14 @@ async def on_message_edited(event):
     try:
         # Oyun numarasını bul - TÜM FORMATLARI DENE
         game_num = 0
-        game_num_match = re.search(r'#N(\d+)', msg.text)
-        if not game_num_match:
-            game_num_match = re.search(r'No\s*:\s*(\d+)', msg.text)
-        
+        game_num_match = re.search(r'#N(\d+)|No\s*:\s*(\d+)|\u2116(\d+)', msg.text)
         if game_num_match:
-            game_num = int(game_num_match.group(1))
+            if game_num_match.group(1):
+                game_num = int(game_num_match.group(1))
+            elif game_num_match.group(2):
+                game_num = int(game_num_match.group(2))
+            elif game_num_match.group(3):
+                game_num = int(game_num_match.group(3))
         else:
             print("❌ Düzenlenen mesajda oyun numarası bulunamadı")
             return
@@ -427,7 +441,7 @@ if __name__ == '__main__':
     print(f"   Hedef: {KANAL_HEDEF}")
     print("🎯 Patternler: #C2_3, #C3_2, #C3_3")
     print("⚡ Martingale: 3 adım")
-    print("🔍 Oyun numarası formatları: #N, No:")
+    print("🔍 Oyun numarası formatları: #N, No:, №")
     
     with client:
         client.run_until_disconnected()
