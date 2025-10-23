@@ -8,21 +8,21 @@ from datetime import datetime
 # ==============================================================================
 # Telegram API Bilgileri ve Kanal Ayarları
 # ==============================================================================
-API_ID = 27518940
-API_HASH = '30b6658a1870f8462108130783fef14f'
+API_ID = 29581698
+API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
 
 # --- Kanal Bilgileri ---
 KANAL_KAYNAK_ID = -1001626824569
-KANAL_HEDEF = "@emirbot5"
+KANAL_HEDEF = "@royalbaccfree"
 
-client = TelegramClient('my_new_baccarat_bot', API_ID, API_HASH)
+client = TelegramClient('rat_bot', API_ID, API_HASH)
 
 # ==============================================================================
 # Global Değişkenler ve Takip Mekanizmaları - TAMAMEN YENİ STRATEJİ
 # ==============================================================================
 game_results = {}
 martingale_trackers = {}
-MAX_MARTINGALE_STEPS = 2  # DAHA DÜŞÜK RİSK - 3 adım (0,1,2)
+MAX_MARTINGALE_STEPS = 3  # DAHA DÜŞÜK RİSK - 3 adım (0,1,2)
 MAX_GAME_NUMBER = 1440
 is_signal_active = False
 
