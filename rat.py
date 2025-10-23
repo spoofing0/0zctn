@@ -52,16 +52,14 @@ def is_arrow_on_player_side(text):
         if '▶️' not in text:
             return False, False
         
-        # Basit kontrol: Ok işaretinden önce oyuncu kartları var mı?
         arrow_index = text.find('▶️')
         text_before_arrow = text[:arrow_index]
-        text_after_arrow = text[arrow_index + 1:]
         
-        # Oyuncu kartları genellikle ilk parantez içinde
+        # Sadece oyuncu kartlarının olup olmadığını kontrol et
         player_has_cards = '(' in text_before_arrow and ')' in text_before_arrow
-        banker_has_cards = '(' in text_after_arrow and ')' in text_after_arrow
         
-        return player_has_cards, banker_has_cards
+        # Oyuncu tarafında ok varsa True döndür
+        return player_has_cards, not player_has_cards
     except Exception as e:
         print(f"❌ Ok tespit hatası: {e}")
         return False, False
@@ -119,7 +117,7 @@ def extract_game_info_from_message(text):
         }
         
         # Oyun numarasını bul
-        game_match = re.search(r'#N(\d+)', text)
+        game_match = re.search(r'[#⏱]N?№?\s*(\d+)', text)
         if game_match:
             game_info['game_number'] = int(game_match.group(1))
         
@@ -136,8 +134,6 @@ def extract_game_info_from_message(text):
             game_info['is_final'] = True
 
         # Oyuncu ve banker kartlarını çıkar
-        # Örnek metin: "#N1  (♦♠) 5 (♣♦)"
-        # Oyuncu kartları ilk parantez, banker kartları ikinci parantez
         card_matches = re.findall(r'\(([^)]+)\)', text)
         if len(card_matches) >= 1:
             game_info['player_cards'] = card_matches[0]
@@ -162,9 +158,9 @@ def should_send_signal(game_info):
         if not game_info['patterns']:
             return False, "Güçlü pattern yok"
         
-        # Ok veya final kontrolü: Banker tarafında ok varsa VEYA finalse
-        if not game_info['arrow_banker'] and not game_info['is_final']:
-            return False, "Banker tarafında ok yok ve final değil"
+        # OYUNCU TARAFINDA OK VARSA SİNYAL GÖNDER
+        if not game_info['arrow_player']:
+            return False, "Oyuncu tarafında ok yok"
         
         # Kart kontrolü
         signal_suit = extract_largest_value_suit(game_info['player_cards'])
@@ -223,10 +219,17 @@ async def check_martingale_trackers():
                 continue
                 
             result_info = game_results.get(game_to_check)
-            if not result_info or not result_info.get('is_final'):
+            if not result_info:
                 continue
             
+            # ⚡ BANKERİN BİTMESİNİ BEKLEME! OYUNCU KARTLARI BELLİ OLUR OLMAZ KONTROL ET
             player_cards_str = result_info.get('player_cards', '')
+            
+            # Oyuncu kartları yoksa veya henüz belli değilse bekle
+            if not player_cards_str or len(player_cards_str.strip()) < 2:
+                continue
+            
+            # Oyuncu kartları belli, hemen kontrol et!
             signal_won = bool(re.search(re.escape(tracker_info['signal_suit']), player_cards_str))
             
             if signal_won:
@@ -235,7 +238,7 @@ async def check_martingale_trackers():
                 win_text = f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ✅ {current_step}️⃣**"
                 try: 
                     await tracker_info['message_obj'].edit(win_text)
-                    print(f"🎉 Sinyal #{signal_game_num} KAZANDI! (Adım {current_step})")
+                    print(f"🎉 Sinyal #{signal_game_num} KAZANDI! (Adım {current_step}) - OYUNCU KARTLARI: {player_cards_str}")
                 except: 
                     pass
                 trackers_to_remove.append(signal_game_num)
@@ -248,7 +251,7 @@ async def check_martingale_trackers():
                         await tracker_info['message_obj'].edit(
                             f"**#N{signal_game_num} - {tracker_info['signal_suit']} - {MAX_MARTINGALE_STEPS}D | 🔄 {tracker_info['step']}️⃣**"
                         )
-                        print(f"🔄 Sinyal #{signal_game_num} kaybetti, {tracker_info['step']}. adıma geçiyor")
+                        print(f"🔄 Sinyal #{signal_game_num} kaybetti, {tracker_info['step']}. adıma geçiyor - OYUNCU KARTLARI: {player_cards_str}")
                     except: 
                         pass
                 else:
@@ -258,7 +261,7 @@ async def check_martingale_trackers():
                         await tracker_info['message_obj'].edit(
                             f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ❌**"
                         )
-                        print(f"💥 Sinyal #{signal_game_num} kaybetti, SERİ BİTTİ")
+                        print(f"💥 Sinyal #{signal_game_num} kaybetti, SERİ BİTTİ - OYUNCU KARTLARI: {player_cards_str}")
                     except: 
                         pass
                     trackers_to_remove.append(signal_game_num)
@@ -409,7 +412,7 @@ async def active_command(event):
 if __name__ == '__main__':
     print("🤖 BACCARAT BOT YENİDEN BAŞLATILDI!")
     print("🎯 Özellikler: OK Takibi + 4 Adım Martingale")
-    print("🔧 Hata ayıklama: AKTİF")
+    print("⚡ BANKER BEKLENMEZ - OYUNCU KARTLARI BELLİ OLUR OLMAZ HAREKET EDİLİR")
     print("=====================================")
     
     try:
