@@ -44,13 +44,18 @@ STRONG_PATTERNS = ['#C2_3', '#C3_2', '#C3_3']
 def is_arrow_on_player_side(text):
     """Okun hangi tarafta olduğunu tespit eder"""
     try:
-        # Mesajı parçalara ayır ve okun konumunu tespit et
+        # 👉 işaretinin konumuna göre tarafları belirle
         if '👉' not in text:
             return False, False
             
-        # Oyuncu kartları bölümünü bul
-        player_section = text.split('(')[0] if '(' in text else text
-        banker_section = text.split(')')[1] if ')' in text else text
+        # Parantezleri kullanarak oyuncu ve banker bölümlerini ayır
+        parts = re.split(r'[()]', text)
+        if len(parts) < 3:
+            return False, False
+            
+        # İlk parantez içi oyuncu, ikinci parantez içi banker
+        player_section = parts[0] + parts[1]  # Oyuncu bölümü
+        banker_section = parts[2]  # Banker bölümü
         
         arrow_player = '👉' in player_section
         arrow_banker = '👉' in banker_section
@@ -63,11 +68,13 @@ def is_arrow_on_player_side(text):
 def extract_player_suits(text):
     """Oyuncu kartlarındaki suit'leri çıkarır"""
     try:
+        # İlk parantez içindeki oyuncu kartlarını al
         player_match = re.search(r'\((.*?)\)', text)
         if not player_match:
             return []
         
         player_cards = player_match.group(1)
+        # Kartlardaki suit'leri bul (emoji karakterleri)
         suits = re.findall(r'[♣♦♥♠]', player_cards)
         return suits
     except Exception as e:
@@ -86,14 +93,18 @@ def get_next_game_number(current_game_num):
 
 def extract_largest_value_suit(cards_str):
     try:
-        cards = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', cards_str)
-        if not cards or len(cards) < 2: return None
+        # Kartları ve suit'leri ayır
+        cards = re.findall(r'(\d+|[A-Z])([♣♦♥♠])', cards_str)
+        if not cards or len(cards) < 2: 
+            return None
 
         max_value = -1
         largest_value_suit = None
         values = [get_baccarat_value(card[0]) for card in cards]
         
-        if len(values) == 2 and values[0] == values[1]: return None
+        # Eğer tüm değerler 0 ise (A, K, Q, J, 2, T)
+        if all(v == 0 for v in values):
+            return None
 
         for card_char, suit in cards:
             value = get_baccarat_value(card_char)
@@ -101,7 +112,7 @@ def extract_largest_value_suit(cards_str):
                 max_value = value
                 largest_value_suit = suit
 
-        return None if max_value == 0 else largest_value_suit
+        return largest_value_suit
     except Exception as e:
         print(f"Kart değeri çıkarma hatası: {e}")
         return None
@@ -110,17 +121,21 @@ def extract_game_info_from_message(text):
     game_info = {
         'game_number': None, 'player_cards': '', 'banker_cards': '',
         'is_final': False, 'patterns': [], 'pattern_strength': 0,
-        'arrow_on_player': False, 'arrow_on_banker': False
+        'arrow_on_player': False, 'arrow_on_banker': False,
+        'raw_text': text
     }
     
     try:
-        # Oyun numarasını çıkar - birden fazla pattern deneyelim
+        # Oyun numarasını çıkar - TÜM FORMATLARI DENE
         game_num_match = re.search(r'#N(\d+)', text)
+        if not game_num_match:
+            game_num_match = re.search(r'№(\d+)', text)  № formatı
         if not game_num_match:
             game_num_match = re.search(r'No\s*:\s*(\d+)', text)
         
         if game_num_match:
             game_info['game_number'] = int(game_num_match.group(1))
+            print(f"🔢 Oyun numarası bulundu: #{game_info['game_number']}")
 
         # Pattern tespiti
         detected_patterns = [p for p in STRONG_PATTERNS if p in text]
@@ -132,14 +147,23 @@ def extract_game_info_from_message(text):
         game_info['arrow_on_player'] = arrow_player
         game_info['arrow_on_banker'] = arrow_banker
 
-        # Oyun bilgilerini çıkar
-        game_match = re.search(r'#N\d+\s+.*?\((.*?)\)\s+.*?(\d+\s+\(.*\))', text.replace('️', ''), re.DOTALL)
-        if game_match:
-            game_info['player_cards'] = game_match.group(1)
-            game_info['banker_cards'] = game_match.group(2)
-            # Eğer ok banker tarafındaysa veya diğer işaretler varsa, is_final True
-            if any(indicator in text for indicator in ['✅', '🔰', '#X']) or arrow_banker:
-                game_info['is_final'] = True
+        # Oyun bilgilerini çıkar - GELİŞMİŞ REGEX
+        # Oyuncu kartları: ilk parantez içi
+        player_match = re.search(r'\((.*?)\)', text)
+        if player_match:
+            game_info['player_cards'] = player_match.group(1)
+            print(f"🎴 Oyuncu kartları: {game_info['player_cards']}")
+
+        # Banker kartları: ikinci parantez içi (varsa)
+        banker_match = re.search(r'\((.*?)\)', text[text.find(')')+1:] if ')' in text else text)
+        if banker_match:
+            game_info['banker_cards'] = banker_match.group(1)
+            print(f"🎴 Banker kartları: {game_info['banker_cards']}")
+
+        # Final kontrolü - ok banker tarafındaysa veya diğer işaretler varsa
+        if any(indicator in text for indicator in ['✅', '🔰', '#X']) or arrow_banker:
+            game_info['is_final'] = True
+            print(f"🏁 Final sonucu: {game_info['is_final']}")
         
         return game_info
     except Exception as e:
@@ -271,18 +295,20 @@ async def on_new_message(event):
     print(f"📥 YENİ MESAJ: {msg.text[:100]}...")
 
     try:
-        # Oyun numarasını bul
+        # Oyun numarasını bul - TÜM FORMATLARI DENE
+        game_num = 0
         game_num_match = re.search(r'#N(\d+)', msg.text)
+        if not game_num_match:
+            game_num_match = re.search(r'№(\d+)', msg.text)  # № formatı
         if not game_num_match:
             game_num_match = re.search(r'No\s*:\s*(\d+)', msg.text)
         
-        game_num = int(game_num_match.group(1)) if game_num_match else 0
-
-        if game_num == 0:
+        if game_num_match:
+            game_num = int(game_num_match.group(1))
+            print(f"🔢 Oyun #{game_num} bulundu")
+        else:
             print("❌ Oyun numarası bulunamadı")
             return
-
-        print(f"🔍 Oyun #{game_num} işleniyor...")
 
         # Oyun bilgilerini kaydet
         game_info = extract_game_info_from_message(msg.text)
@@ -298,9 +324,10 @@ async def on_new_message(event):
             print("🔴 Sistem durduruldu - 3+ ardışık kayıp")
             return
 
-        # Kart kontrolü
+        # Kart kontrolü - parantez içinde kart varsa
         if re.search(r'\(([^)]+)\)', msg.text):
             arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
+            print(f"📍 Ok konumu - Oyuncu: {arrow_player}, Banker: {arrow_banker}")
 
             # 👉 sağ taraftaysa banker tarafı → işlem yapılabilir
             if arrow_banker:
@@ -328,11 +355,19 @@ async def on_message_edited(event):
     print(f"✏️ DÜZENLENEN MESAJ: {msg.text[:100]}...")
 
     try:
+        # Oyun numarasını bul - TÜM FORMATLARI DENE
+        game_num = 0
         game_num_match = re.search(r'#N(\d+)', msg.text)
+        if not game_num_match:
+            game_num_match = re.search(r'№(\d+)', msg.text)  # № formatı
         if not game_num_match:
             game_num_match = re.search(r'No\s*:\s*(\d+)', msg.text)
         
-        game_num = int(game_num_match.group(1)) if game_num_match else 0
+        if game_num_match:
+            game_num = int(game_num_match.group(1))
+        else:
+            print("❌ Düzenlenen mesajda oyun numarası bulunamadı")
+            return
 
         if msg.id in watched_incomplete:
             arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
@@ -410,6 +445,7 @@ if __name__ == '__main__':
     print(f"   Hedef: {KANAL_HEDEF}")
     print("🎯 Patternler: #C2_3, #C3_2, #C3_3")
     print("⚡ Martingale: 3 adım")
+    print("🔍 Oyun numarası formatları: #N, №, No:")
     
     with client:
         client.run_until_disconnected()
