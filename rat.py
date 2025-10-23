@@ -12,7 +12,7 @@ API_ID = 29581698
 API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
 
 # --- Kanal Bilgileri ---
-KANAL_KAYNAK_ID = -1001626824569
+source_channel = -1001626824569  # Bu satırı ekledim
 KANAL_HEDEF = "@royalbaccfree"
 
 client = TelegramClient('rat_bot', API_ID, API_HASH)
