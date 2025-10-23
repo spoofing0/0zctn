@@ -22,7 +22,8 @@ client = TelegramClient('rat_bot', API_ID, API_HASH)
 # ==============================================================================
 game_results = {}
 martingale_trackers = {}
-MAX_MARTINGALE_STEPS = 3  # 🎯 4 ADIM (0,1,2,3)
+watched_incomplete = {}  # Tamamlanmamış oyunları takip etmek için
+MAX_MARTINGALE_STEPS = 2  # 3 adım (0,1,2)
 MAX_GAME_NUMBER = 1440
 is_signal_active = False
 
@@ -40,11 +41,24 @@ performance_stats = {
 # Pattern tanımları
 STRONG_PATTERNS = ['#C2_3', '#C3_2', '#C3_3']
 
-print("🐀 RAT BOT BAŞLATILDI - OYUNCU KART ODAKLI SİSTEM AKTİF")
+# Pattern'ler
+game_number_pattern = r'#N(\d+)|No\s*:\s*(\d+)'
 
-# ==============================================================================
-# TEMEL FONKSİYONLAR
-# ==============================================================================
+def is_arrow_on_player_side(text):
+    """Okun hangi tarafta olduğunu tespit eder"""
+    arrow_player = '👉' in text.split('(')[0]  # Oyuncu kartlarından önce
+    arrow_banker = '👉' in text.split(')')[1] if ')' in text else False  # Banker kartlarından sonra
+    return arrow_player, arrow_banker
+
+def extract_player_suits(text):
+    """Oyuncu kartlarındaki suit'leri çıkarır"""
+    player_match = re.search(r'\((.*?)\)', text)
+    if not player_match:
+        return []
+    
+    player_cards = player_match.group(1)
+    suits = re.findall(r'[♣♦♥♠]', player_cards)
+    return suits
 
 def get_baccarat_value(card_char):
     if card_char == '10': return 10
@@ -57,315 +71,206 @@ def get_next_game_number(current_game_num):
     return 1 if next_num > MAX_GAME_NUMBER else next_num
 
 def extract_largest_value_suit(cards_str):
-    try:
-        cards = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', cards_str)
-        if not cards or len(cards) < 2: 
-            return None
+    cards = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', cards_str)
+    if not cards or len(cards) < 2: return None
 
-        max_value = -1
-        largest_value_suit = None
-        values = [get_baccarat_value(card[0]) for card in cards]
-        
-        if len(values) == 2 and values[0] == values[1]: 
-            return None
+    max_value = -1
+    largest_value_suit = None
+    values = [get_baccarat_value(card[0]) for card in cards]
+    
+    if len(values) == 2 and values[0] == values[1]: return None
 
-        for card_char, suit in cards:
-            value = get_baccarat_value(card_char)
-            if value > max_value:
-                max_value = value
-                largest_value_suit = suit
+    for card_char, suit in cards:
+        value = get_baccarat_value(card_char)
+        if value > max_value:
+            max_value = value
+            largest_value_suit = suit
 
-        return None if max_value == 0 else largest_value_suit
-    except Exception as e:
-        print(f"❌ Kart değeri hatası: {e}")
-        return None
+    return None if max_value == 0 else largest_value_suit
 
 def extract_game_info_from_message(text):
-    """Oyun bilgilerini çıkar"""
-    try:
-        game_info = {
-            'game_number': None, 
-            'player_cards': '', 
-            'banker_cards': '',
-            'is_final': False, 
-            'patterns': [], 
-            'pattern_strength': 0
-        }
-        
-        # DEBUG: Mesajı yazdır
-        print(f"🔍 [DEBUG] İşlenen mesaj: {text}")
-        
-        # Oyun numarasını bul
-        game_match = re.search(r'[#⏱]N?№?\s*(\d+)', text)
-        if game_match:
-            game_info['game_number'] = int(game_match.group(1))
-            print(f"🔍 [DEBUG] Oyun numarası bulundu: {game_info['game_number']}")
-        else:
-            print("❌ [DEBUG] Oyun numarası bulunamadı")
-        
-        # Pattern tespiti
-        detected_patterns = [p for p in STRONG_PATTERNS if p in text]
-        game_info['patterns'] = detected_patterns
-        game_info['pattern_strength'] = len(detected_patterns) * 3
-        print(f"🔍 [DEBUG] Patternler: {detected_patterns}")
+    game_info = {
+        'game_number': None, 'player_cards': '', 'banker_cards': '',
+        'is_final': False, 'patterns': [], 'pattern_strength': 0,
+        'arrow_on_player': False, 'arrow_on_banker': False
+    }
+    
+    # Pattern tespiti
+    detected_patterns = [p for p in STRONG_PATTERNS if p in text]
+    game_info['patterns'] = detected_patterns
+    game_info['pattern_strength'] = len(detected_patterns) * 3
 
-        # Final kontrolü
-        if any(indicator in text for indicator in ['✅', '🔰', '#X']):
+    # Ok tespiti
+    arrow_player, arrow_banker = is_arrow_on_player_side(text)
+    game_info['arrow_on_player'] = arrow_player
+    game_info['arrow_on_banker'] = arrow_banker
+
+    # Oyun bilgilerini çıkar
+    game_match = re.search(r'#N(\d+)\s+.*?\((.*?)\)\s+.*?(\d+\s+\(.*\))', text.replace('️', ''), re.DOTALL)
+    if game_match:
+        game_info['game_number'] = int(game_match.group(1))
+        game_info['player_cards'] = game_match.group(2)
+        game_info['banker_cards'] = game_match.group(3)
+        # Eğer ok banker tarafındaysa veya diğer işaretler varsa, is_final True
+        if any(indicator in text for indicator in ['✅', '🔰', '#X']) or arrow_banker:
             game_info['is_final'] = True
-            print("🔍 [DEBUG] Bu bir final mesajı")
-        else:
-            print("🔍 [DEBUG] Bu bir final mesajı değil")
+    
+    return game_info
 
-        # Oyuncu ve banker kartlarını çıkar
-        card_matches = re.findall(r'\(([^)]+)\)', text)
-        if len(card_matches) >= 1:
-            game_info['player_cards'] = card_matches[0]
-            print(f"🔍 [DEBUG] Oyuncu kartları: {game_info['player_cards']}")
-        if len(card_matches) >= 2:
-            game_info['banker_cards'] = card_matches[1]
-            print(f"🔍 [DEBUG] Banker kartları: {game_info['banker_cards']}")
-            
-        return game_info
-    except Exception as e:
-        print(f"❌ Oyun bilgisi hatası: {e}")
-        return {'game_number': None}
+async def process_bet(game_num, msg, suits):
+    """Yeni sisteme göre bahis işleme"""
+    global is_signal_active, performance_stats
+    
+    if performance_stats['consecutive_losses'] >= 3:
+        return
+    
+    if is_signal_active:
+        return
+    
+    game_info = extract_game_info_from_message(msg.text)
+    if not game_info['game_number']:
+        return
+    
+    should_send, reason = should_send_signal(game_info)
+    if should_send:
+        next_game_num = get_next_game_number(game_num)
+        await send_optimized_signal(next_game_num, reason, game_info)
 
 def should_send_signal(game_info):
-    """Sinyal gönderilmeli mi?"""
-    try:
-        if performance_stats['consecutive_losses'] >= 3:
-            print("🔴 [DEBUG] 3+ ardışık kayıp - sinyal gönderilmiyor")
-            return False, "3+ ardışık kayıp"
-        
-        if not game_info['game_number']:
-            print("🔴 [DEBUG] Oyun numarası yok - sinyal gönderilmiyor")
-            return False, "Oyun numarası yok"
-            
-        # Sadece güçlü patternler
-        if not game_info['patterns']:
-            print("🔴 [DEBUG] Güçlü pattern yok - sinyal gönderilmiyor")
-            return False, "Güçlü pattern yok"
-        
-        # Eğer sonuçlanmışsa sinyal gönderme
-        if game_info['is_final']:
-            print("🔴 [DEBUG] Sonuçlanmış oyun - sinyal gönderilmiyor")
-            return False, "Sonuçlanmış oyun"
-        
-        # Oyuncu kartları belli mi? (en az 2 kart)
-        player_cards = game_info.get('player_cards', '')
-        if len(player_cards) < 2:
-            print("🔴 [DEBUG] Oyuncu kartları belli değil - sinyal gönderilmiyor")
-            return False, "Oyuncu kartları belli değil"
-        
-        # Kart kontrolü
-        signal_suit = extract_largest_value_suit(player_cards)
-        if not signal_suit:
-            print("🔴 [DEBUG] Uygun kart yok - sinyal gönderilmiyor")
-            return False, "Uygun kart yok"
-        
-        print(f"🟢 [DEBUG] Sinyal gönderilebilir: {signal_suit}")
-        return True, signal_suit
-    except Exception as e:
-        print(f"❌ Sinyal kontrol hatası: {e}")
-        return False, f"Hata: {e}"
-
-# ==============================================================================
-# SİNYAL İŞLEMLERİ
-# ==============================================================================
+    if performance_stats['consecutive_losses'] >= 3:
+        return False, "3+ ardışık kayıp - sistem durduruldu"
+    if not game_info['patterns']: return False, "Güçlü pattern yok"
+    if not game_info['is_final']: return False, "Final değil"
+    
+    signal_suit = extract_largest_value_suit(game_info['player_cards'])
+    return (True, signal_suit) if signal_suit else (False, "Uygun kart yok")
 
 async def send_optimized_signal(game_num, signal_suit, game_info):
     global is_signal_active, performance_stats
+    if is_signal_active: return
     
-    if is_signal_active: 
-        print("⏳ Aktif sinyal var, yeni sinyal gönderilmiyor")
-        return
+    performance_stats['total_signals'] += 1
+    performance_stats['last_signal'] = datetime.now().strftime('%H:%M:%S')
     
-    try:
-        performance_stats['total_signals'] += 1
-        performance_stats['last_signal'] = datetime.now().strftime('%H:%M:%S')
-        
-        signal_type = "⚡ YÜKSEK GÜVEN" if game_info['pattern_strength'] >= 3 else "🔸 ORTA GÜVEN"
-        signal_full_text = f"**#N{game_num} - Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS}D - {signal_type}**"
+    signal_type = "⚡ YÜKSEK GÜVEN" if game_info['pattern_strength'] >= 3 else "🔸 ORTA GÜVEN"
+    signal_full_text = f"**#N{game_num} - Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS}D - {signal_type}**"
 
+    try:
         sent_message = await client.send_message(KANAL_HEDEF, signal_full_text)
-        print(f"🎯 SİNYAL GÖNDERİLDİ: {signal_full_text}")
-        
+        print(f"🎯 SİNYAL: {signal_full_text}")
         martingale_trackers[game_num] = {
-            'message_obj': sent_message, 
-            'step': 0, 
-            'signal_suit': signal_suit,
-            'sent_game_number': game_num, 
-            'expected_game_number_for_check': game_num
+            'message_obj': sent_message, 'step': 0, 'signal_suit': signal_suit,
+            'sent_game_number': game_num, 'expected_game_number_for_check': game_num
         }
         is_signal_active = True
-        
-    except Exception as e:
-        print(f"❌ Sinyal gönderme hatası: {e}")
+    except Exception as e: print(f"Sinyal hatası: {e}")
 
 async def check_martingale_trackers():
     global martingale_trackers, is_signal_active, performance_stats
-    
     trackers_to_remove = []
 
     for signal_game_num, tracker_info in list(martingale_trackers.items()):
-        try:
-            current_step = tracker_info['step']
-            game_to_check = tracker_info['expected_game_number_for_check']
-            
-            if game_to_check not in game_results:
-                continue
-                
-            result_info = game_results.get(game_to_check)
-            if not result_info:
-                continue
-            
-            # OYUNCU KARTLARI BELLİ OLUR OLMAZ KONTROL ET - BANKER BEKLEME
-            player_cards_str = result_info.get('player_cards', '')
-            
-            # Oyuncu kartları yoksa veya henüz belli değilse bekle
-            if not player_cards_str or len(player_cards_str.strip()) < 2:
-                continue
-            
-            # Oyuncu kartları belli, hemen kontrol et!
-            signal_won = bool(re.search(re.escape(tracker_info['signal_suit']), player_cards_str))
-            
-            if signal_won:
-                performance_stats['wins'] += 1
-                performance_stats['consecutive_losses'] = 0
-                win_text = f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ✅ {current_step}️⃣**"
-                try: 
-                    await tracker_info['message_obj'].edit(win_text)
-                    print(f"🎉 Sinyal #{signal_game_num} KAZANDI! (Adım {current_step})")
-                except: 
-                    pass
+        current_step = tracker_info['step']
+        game_to_check = tracker_info['expected_game_number_for_check']
+        
+        if game_to_check not in game_results: continue
+        result_info = game_results.get(game_to_check)
+        if not result_info['is_final']: continue
+        
+        player_cards_str = result_info['player_cards']
+        signal_won = bool(re.search(re.escape(tracker_info['signal_suit']), player_cards_str))
+        
+        if signal_won:
+            performance_stats['wins'] += 1
+            performance_stats['consecutive_losses'] = 0
+            win_text = f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ✅ {current_step}️⃣**"
+            try: await tracker_info['message_obj'].edit(win_text)
+            except: pass
+            trackers_to_remove.append(signal_game_num)
+            is_signal_active = False
+        else:
+            if current_step < MAX_MARTINGALE_STEPS:
+                tracker_info['step'] += 1
+                tracker_info['expected_game_number_for_check'] = get_next_game_number(game_to_check)
+                try: await tracker_info['message_obj'].edit(f"**#N{signal_game_num} - {tracker_info['signal_suit']} - {MAX_MARTINGALE_STEPS}D | 🔄 {tracker_info['step']}️⃣**")
+                except: pass
+            else:
+                performance_stats['losses'] += 1
+                performance_stats['consecutive_losses'] += 1
+                try: await tracker_info['message_obj'].edit(f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ❌**")
+                except: pass
                 trackers_to_remove.append(signal_game_num)
                 is_signal_active = False
-            else:
-                if current_step < MAX_MARTINGALE_STEPS:
-                    tracker_info['step'] += 1
-                    tracker_info['expected_game_number_for_check'] = get_next_game_number(game_to_check)
-                    try: 
-                        await tracker_info['message_obj'].edit(
-                            f"**#N{signal_game_num} - {tracker_info['signal_suit']} - {MAX_MARTINGALE_STEPS}D | 🔄 {tracker_info['step']}️⃣**"
-                        )
-                        print(f"🔄 Sinyal #{signal_game_num} kaybetti, {tracker_info['step']}. adıma geçiyor")
-                    except: 
-                        pass
-                else:
-                    performance_stats['losses'] += 1
-                    performance_stats['consecutive_losses'] += 1
-                    try: 
-                        await tracker_info['message_obj'].edit(
-                            f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ❌**"
-                        )
-                        print(f"💥 Sinyal #{signal_game_num} kaybetti, SERİ BİTTİ")
-                    except: 
-                        pass
-                    trackers_to_remove.append(signal_game_num)
-                    is_signal_active = False
-                    
-        except Exception as e:
-            print(f"❌ Martingale takip hatası #{signal_game_num}: {e}")
 
     for game_num in trackers_to_remove:
         martingale_trackers.pop(game_num, None)
 
-# ==============================================================================
-# EVENT HANDLER'LAR
-# ==============================================================================
+# ==================== TELEGRAM EVENT HANDLERS ====================
 
 @client.on(events.NewMessage(chats=KANAL_KAYNAK_ID))
-async def handle_new_message(event):
-    """YENİ MESAJ İŞLEYİCİ"""
-    try:
-        msg = event.message
-        if not msg.text:
-            return
+async def on_new_message(event):
+    msg = event.message
+    if not msg.text:
+        return
 
-        print(f"📥 YENİ MESAJ: {msg.text[:100]}...")
-        
-        game_info = extract_game_info_from_message(msg.text)
-        if not game_info['game_number']:
-            print("⏭️ Oyun numarası bulunamadı, atlanıyor")
-            return
+    games = [int(m1 or m2) for m1, m2 in re.findall(game_number_pattern, msg.text)]
+    game_num = games[0] if games else 0
 
-        # Oyun bilgisini kaydet
-        game_results[game_info['game_number']] = game_info
-        
-        # DEBUG: Tüm oyun bilgilerini yazdır
-        print(f"🔍 Oyun #{game_info['game_number']} - Pattern: {game_info['patterns']} - Final: {game_info['is_final']}")
-        print(f"🔍 Oyuncu Kartları: {game_info['player_cards']}")
-        
-        # ÖNCE martingale kontrolü (önceki sinyalleri kontrol et)
-        await check_martingale_trackers()
-        
-        # SONRA yeni sinyal gönder
-        if not is_signal_active:
-            should_send, reason = should_send_signal(game_info)
-            if should_send:
-                next_game_num = get_next_game_number(game_info['game_number'])
-                await send_optimized_signal(next_game_num, reason, game_info)
-            else:
-                print(f"⏭️ #N{game_info['game_number']} sinyal gönderilmedi: {reason}")
+    if re.search(r'\(([^)]+)\)', msg.text):
+        arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
+
+        # 👉 sağ taraftaysa banker tarafı → işlem yapılabilir
+        if arrow_banker:
+            suits = extract_player_suits(msg.text)
+            if suits:
+                await process_bet(game_num, msg, suits)
+                print(f"[PROCESS] 🎯 #N{game_num} tamamlandı (👉 banker tarafında)")
         else:
-            print("⏭️ Zaten aktif sinyal var, yeni sinyal gönderilmiyor")
-            
-    except Exception as e:
-        print(f"❌ Mesaj işleme hatası: {e}")
+            # 👉 oyuncu tarafında → bekle
+            watched_incomplete[msg.id] = (game_num, msg)
+            print(f"[WAIT] ⏳ #N{game_num} 👉 oyuncu kart açıyor, bekleniyor...")
 
+# ✅ EKLENDİ: Mesaj düzenlenince banker tarafına geçtiyse işle
 @client.on(events.MessageEdited(chats=KANAL_KAYNAK_ID))
-async def handle_edited_message(event):
-    """DÜZENLENEN MESAJ İŞLEYİCİ"""
-    try:
-        msg = event.message
-        if not msg.text:
-            return
+async def on_message_edited(event):
+    msg = event.message
+    if not msg.text:
+        return
 
-        print(f"✏️ DÜZENLENEN MESAJ: {msg.text[:100]}...")
-        
-        game_info = extract_game_info_from_message(msg.text)
-        if not game_info['game_number']:
-            return
+    games = [int(m1 or m2) for m1, m2 in re.findall(game_number_pattern, msg.text)]
+    game_num = games[0] if games else 0
 
-        # Oyun bilgisini güncelle
-        game_results[game_info['game_number']] = game_info
-        
-        # DEBUG: Tüm oyun bilgilerini yazdır
-        print(f"🔍 [EDIT] Oyun #{game_info['game_number']} - Pattern: {game_info['patterns']} - Final: {game_info['is_final']}")
-        
-        # ÖNCE martingale kontrolü
-        await check_martingale_trackers()
-        
-        # SONRA yeni sinyal gönder
-        if not is_signal_active:
-            should_send, reason = should_send_signal(game_info)
-            if should_send:
-                next_game_num = get_next_game_number(game_info['game_number'])
-                await send_optimized_signal(next_game_num, reason, game_info)
-            else:
-                print(f"⏭️ [EDIT] #N{game_info['game_number']} sinyal gönderilmedi: {reason}")
-                    
-    except Exception as e:
-        print(f"❌ Düzenlenen mesaj hatası: {e}")
+    if msg.id in watched_incomplete:
+        arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
+        if arrow_banker:
+            suits = extract_player_suits(msg.text)
+            if suits:
+                await process_bet(game_num, msg, suits)
+                del watched_incomplete[msg.id]
+                print(f"[EDIT] ✅ #N{game_num} banker tarafına geçti → sonuç işlendi.")
 
-# ==============================================================================
-# TELEGRAM KOMUTLARI
-# ==============================================================================
+# Mevcut message handler'ı da koruyoruz
+@client.on(events.NewMessage(chats=KANAL_KAYNAK_ID))
+@client.on(events.MessageEdited(chats=KANAL_KAYNAK_ID))
+async def handle_source_channel_message(event):
+    if performance_stats['consecutive_losses'] >= 3: 
+        return
+    
+    text = re.sub(r'\*\*', '', event.message.text).strip()
+    game_info = extract_game_info_from_message(text)
+    if not game_info['game_number']: 
+        return
+    
+    game_results[game_info['game_number']] = game_info
+    await check_martingale_trackers()
 
+# Telegram Komutları (mevcut komutlar aynen korundu)
 @client.on(events.NewMessage(pattern='/start'))
 async def start_command(event):
     await event.reply("""
-🐀 **RAT BOT AKTİF** 
-✅ OYUNCU KART ODAKLI SİSTEM
-🎯 Martingale: 4 ADIM
-🔍 Pattern: #C2_3, #C3_2, #C3_3
-⚡ BANKER BEKLENMEZ
-
-**Komutlar:**
-/start - Bu mesajı göster
-/stats - İstatistikler
-/status - Bot durumu
-/active - Aktif sinyaller
+🤖 **Baccarat Bot Aktif** 🎰
+Komutlar: /start, /help, /stats, /status, /patterns, /active, /analysis
+Strateji: 3 adım Martingale + Sadece güçlü patternler
 """)
 
 @client.on(events.NewMessage(pattern='/stats'))
@@ -374,48 +279,50 @@ async def stats_command(event):
     win_rate = (performance_stats['wins'] / total * 100) if total > 0 else 0
     await event.reply(f"""
 📊 **İstatistikler:**
-├─ Sinyal: {performance_stats['total_signals']}
-├─ Kazanç: {performance_stats['wins']} 
-├─ Kayıp: {performance_stats['losses']}
-├─ Oran: {win_rate:.1f}%
-├─ Ardışık Kayıp: {performance_stats['consecutive_losses']}
-└─ Martingale: {MAX_MARTINGALE_STEPS} adım
+Sinyal: {performance_stats['total_signals']}
+Kazanç: {performance_stats['wins']} | Kayıp: {performance_stats['losses']}
+Oran: {win_rate:.1f}%
+Ardışık Kayıp: {performance_stats['consecutive_losses']}
+""")
+
+@client.on(events.NewMessage(pattern='/analysis'))
+async def analysis_command(event):
+    status = "🔴 DURDURULDU" if performance_stats['consecutive_losses'] >= 3 else "🟢 AKTİF"
+    await event.reply(f"""
+📈 **Analiz:**
+Durum: {status}
+Ardışık Kayıp: {performance_stats['consecutive_losses']}/3
+Max Kayıp: {performance_stats['max_consecutive_losses']}
+Son Sinyal: {performance_stats['last_signal'] or 'Yok'}
 """)
 
 @client.on(events.NewMessage(pattern='/status'))
 async def status_command(event):
     await event.reply(f"""
-🟢 **Bot Durumu:**
-├─ Aktif Sinyal: {'✅' if is_signal_active else '❌'}
-├─ Takip Edilen: {len(martingale_trackers)} sinyal
-├─ Ardışık Kayıp: {performance_stats['consecutive_losses']}
-├─ Hafıza: {len(game_results)} oyun
-└─ Son Sinyal: {performance_stats['last_signal'] or 'Yok'}
+🟢 **Bot Çalışıyor**
+Aktif Sinyal: {'✅' if is_signal_active else '❌'}
+Takip: {len(martingale_trackers)} sinyal
+Ardışık Kayıp: {performance_stats['consecutive_losses']}
+""")
+
+@client.on(events.NewMessage(pattern='/patterns'))
+async def patterns_command(event):
+    await event.reply("""
+🎯 **Aktif Patternler:**
+#C2_3, #C3_2, #C3_3
 """)
 
 @client.on(events.NewMessage(pattern='/active'))
 async def active_command(event):
     if performance_stats['consecutive_losses'] >= 3:
         await event.reply("🔴 SİSTEM DURDURULDU - 3+ ardışık kayıp")
-    elif is_signal_active and martingale_trackers:
-        active_list = "\n".join([f"├─ #N{num} - {t['signal_suit']} (Adım {t['step']})" for num, t in martingale_trackers.items()])
-        await event.reply(f"🔴 **AKTİF SİNYAL:**\n{active_list}\n└─ Toplam: {len(martingale_trackers)} sinyal")
+    elif is_signal_active:
+        active_list = "\n".join([f"#N{num} - {t['signal_suit']} (Adım {t['step']})" for num, t in martingale_trackers.items()])
+        await event.reply(f"🔴 AKTİF SİNYAL:\n{active_list}")
     else:
-        await event.reply("🟢 **Aktif sinyal yok**\n└─ Bot sinyal bekliyor...")
-
-# ==============================================================================
-# BOT BAŞLATMA
-# ==============================================================================
+        await event.reply("🟢 Aktif sinyal yok")
 
 if __name__ == '__main__':
-    print("🐀 RAT BOT BAŞLATILDI!")
-    print("🎯 Özellikler: OYUNCU KART ODAKLI + 4 Adım Martingale")
-    print("⚡ BANKER BEKLENMEZ - SADECE OYUNCU KARTLARI")
-    print("=====================================")
-    
-    try:
-        with client:
-            client.run_until_disconnected()
-    except Exception as e:
-        print(f"❌ BOT CRASH: {e}")
-        sys.exit(1)
+    print("🤖 Baccarat Bot Başlatılıyor...")
+    with client:
+        client.run_until_disconnected()
