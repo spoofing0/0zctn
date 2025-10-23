@@ -40,7 +40,7 @@ performance_stats = {
 # Pattern tanımları
 STRONG_PATTERNS = ['#C2_3', '#C3_2', '#C3_3']
 
-print("🤖 BOT BAŞLATILDI - OYUNCU KART ODAKLI SİSTEM AKTİF")
+print("🐀 RAT BOT BAŞLATILDI - OYUNCU KART ODAKLI SİSTEM AKTİF")
 
 # ==============================================================================
 # TEMEL FONKSİYONLAR
@@ -92,26 +92,38 @@ def extract_game_info_from_message(text):
             'pattern_strength': 0
         }
         
+        # DEBUG: Mesajı yazdır
+        print(f"🔍 [DEBUG] İşlenen mesaj: {text}")
+        
         # Oyun numarasını bul
         game_match = re.search(r'[#⏱]N?№?\s*(\d+)', text)
         if game_match:
             game_info['game_number'] = int(game_match.group(1))
+            print(f"🔍 [DEBUG] Oyun numarası bulundu: {game_info['game_number']}")
+        else:
+            print("❌ [DEBUG] Oyun numarası bulunamadı")
         
         # Pattern tespiti
         detected_patterns = [p for p in STRONG_PATTERNS if p in text]
         game_info['patterns'] = detected_patterns
         game_info['pattern_strength'] = len(detected_patterns) * 3
+        print(f"🔍 [DEBUG] Patternler: {detected_patterns}")
 
         # Final kontrolü
         if any(indicator in text for indicator in ['✅', '🔰', '#X']):
             game_info['is_final'] = True
+            print("🔍 [DEBUG] Bu bir final mesajı")
+        else:
+            print("🔍 [DEBUG] Bu bir final mesajı değil")
 
         # Oyuncu ve banker kartlarını çıkar
         card_matches = re.findall(r'\(([^)]+)\)', text)
         if len(card_matches) >= 1:
             game_info['player_cards'] = card_matches[0]
+            print(f"🔍 [DEBUG] Oyuncu kartları: {game_info['player_cards']}")
         if len(card_matches) >= 2:
             game_info['banker_cards'] = card_matches[1]
+            print(f"🔍 [DEBUG] Banker kartları: {game_info['banker_cards']}")
             
         return game_info
     except Exception as e:
@@ -122,29 +134,36 @@ def should_send_signal(game_info):
     """Sinyal gönderilmeli mi?"""
     try:
         if performance_stats['consecutive_losses'] >= 3:
+            print("🔴 [DEBUG] 3+ ardışık kayıp - sinyal gönderilmiyor")
             return False, "3+ ardışık kayıp"
         
         if not game_info['game_number']:
+            print("🔴 [DEBUG] Oyun numarası yok - sinyal gönderilmiyor")
             return False, "Oyun numarası yok"
             
         # Sadece güçlü patternler
         if not game_info['patterns']:
+            print("🔴 [DEBUG] Güçlü pattern yok - sinyal gönderilmiyor")
             return False, "Güçlü pattern yok"
         
         # Eğer sonuçlanmışsa sinyal gönderme
         if game_info['is_final']:
+            print("🔴 [DEBUG] Sonuçlanmış oyun - sinyal gönderilmiyor")
             return False, "Sonuçlanmış oyun"
         
         # Oyuncu kartları belli mi? (en az 2 kart)
         player_cards = game_info.get('player_cards', '')
         if len(player_cards) < 2:
+            print("🔴 [DEBUG] Oyuncu kartları belli değil - sinyal gönderilmiyor")
             return False, "Oyuncu kartları belli değil"
         
         # Kart kontrolü
         signal_suit = extract_largest_value_suit(player_cards)
         if not signal_suit:
+            print("🔴 [DEBUG] Uygun kart yok - sinyal gönderilmiyor")
             return False, "Uygun kart yok"
-            
+        
+        print(f"🟢 [DEBUG] Sinyal gönderilebilir: {signal_suit}")
         return True, signal_suit
     except Exception as e:
         print(f"❌ Sinyal kontrol hatası: {e}")
@@ -336,7 +355,7 @@ async def handle_edited_message(event):
 @client.on(events.NewMessage(pattern='/start'))
 async def start_command(event):
     await event.reply("""
-🤖 **Baccarat Bot Aktif** 
+🐀 **RAT BOT AKTİF** 
 ✅ OYUNCU KART ODAKLI SİSTEM
 🎯 Martingale: 4 ADIM
 🔍 Pattern: #C2_3, #C3_2, #C3_3
@@ -389,7 +408,7 @@ async def active_command(event):
 # ==============================================================================
 
 if __name__ == '__main__':
-    print("🤖 BACCARAT BOT YENİDEN BAŞLATILDI!")
+    print("🐀 RAT BOT BAŞLATILDI!")
     print("🎯 Özellikler: OYUNCU KART ODAKLI + 4 Adım Martingale")
     print("⚡ BANKER BEKLENMEZ - SADECE OYUNCU KARTLARI")
     print("=====================================")
