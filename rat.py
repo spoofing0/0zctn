@@ -27,6 +27,9 @@ MAX_MARTINGALE_STEPS = 2
 MAX_GAME_NUMBER = 1440
 is_signal_active = False
 
+# Pattern tanımları
+STRONG_PATTERNS = ['#C2_3', '#C3_2', '#C3_3']
+
 # İstatistikler
 performance_stats = {
     'total_signals': 0,
@@ -38,8 +41,8 @@ performance_stats = {
     'max_consecutive_losses': 0
 }
 
-# Pattern tanımları
-STRONG_PATTERNS = ['#C2_3', '#C3_2', '#C3_3']
+# Pattern'ler
+game_number_pattern = r'#N(\d+)|№(\d+)|No\s*:\s*(\d+)'
 
 def is_arrow_on_player_side(text):
     try:
@@ -114,16 +117,12 @@ def extract_game_info_from_message(text):
     }
     
     try:
-        # Oyun numarasını çıkar - TÜM FORMATLARI DENE
-        game_num_match = re.search(r'#N(\d+)', text)
-        if not game_num_match:
-            game_num_match = re.search(r'№(\d+)', text)
-        if not game_num_match:
-            game_num_match = re.search(r'No\s*:\s*(\d+)', text)
+        # Oyun numarasını çıkar
+        games = [int(m1 or m2 or m3) for m1, m2, m3 in re.findall(game_number_pattern, text)]
+        game_num = games[0] if games else 0
         
-        if game_num_match:
-            game_info['game_number'] = int(game_num_match.group(1))
-            print(f"🔢 Oyun numarası bulundu: #{game_info['game_number']}")
+        if game_num:
+            game_info['game_number'] = game_num
 
         # Pattern tespiti
         detected_patterns = [p for p in STRONG_PATTERNS if p in text]
@@ -139,17 +138,14 @@ def extract_game_info_from_message(text):
         player_match = re.search(r'\((.*?)\)', text)
         if player_match:
             game_info['player_cards'] = player_match.group(1)
-            print(f"🎴 Oyuncu kartları: {game_info['player_cards']}")
 
         banker_match = re.search(r'\((.*?)\)', text[text.find(')')+1:] if ')' in text else text)
         if banker_match:
             game_info['banker_cards'] = banker_match.group(1)
-            print(f"🎴 Banker kartları: {game_info['banker_cards']}")
 
-        # Final kontrolü - banker tarafında ok varsa veya diğer işaretler varsa
+        # Final kontrolü
         if any(indicator in text for indicator in ['✅', '🔰', '#X']) or arrow_banker:
             game_info['is_final'] = True
-            print(f"🏁 Final sonucu: {game_info['is_final']}")
         
         return game_info
     except Exception as e:
@@ -262,7 +258,7 @@ async def check_martingale_trackers():
                     await tracker_info['message_obj'].edit(f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ❌**")
                     print(f"❌ KAYIP: #{signal_game_num}")
                 except Exception as e: 
-                    print(f"Mesaj düzenleme hatásı: {e}")
+                    print(f"Mesaj düzenleme hatası: {e}")
                 trackers_to_remove.append(signal_game_num)
                 is_signal_active = False
 
@@ -271,123 +267,60 @@ async def check_martingale_trackers():
 
 # ==================== TELEGRAM EVENT HANDLERS ====================
 
-@client.on(events.NewMessage(chats=KANAL_KAYNAK_ID))
+@client.on(events.NewMessage(chats=source_channel))
 async def on_new_message(event):
     msg = event.message
     if not msg.text:
         return
 
-    print(f"📥 YENİ MESAJ: {msg.text[:100]}...")
+    games = [int(m1 or m2 or m3) for m1, m2, m3 in re.findall(game_number_pattern, msg.text)]
+    game_num = games[0] if games else 0
 
-    try:
-        # Oyun numarasını bul - TÜM FORMATLARI DENE
-        game_num = 0
-        game_num_match = re.search(r'#N(\d+)', msg.text)
-        if not game_num_match:
-            game_num_match = re.search(r'№(\d+)', msg.text)
-        if not game_num_match:
-            game_num_match = re.search(r'No\s*:\s*(\d+)', msg.text)
-        
-        if game_num_match:
-            game_num = int(game_num_match.group(1))
-            print(f"🔢 Oyun #{game_num} bulundu")
+    if re.search(r'\(([^)]+)\)', msg.text):
+        arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
+
+        # 👉 sağ taraftaysa banker tarafı → işlem yapılabilir
+        if arrow_banker:
+            suits = extract_player_suits(msg.text)
+            if suits:
+                print(f"[PROCESS] 🎯 #N{game_num} tamamlandı (👉 banker tarafında)")
+                await process_bet(game_num, msg, suits)
         else:
-            print("❌ Oyun numarası bulunamadı")
-            return
+            # 👉 oyuncu tarafında → bekle
+            watched_incomplete[msg.id] = (game_num, msg)
+            print(f"[WAIT] ⏳ #N{game_num} 👉 oyuncu kart açıyor, bekleniyor...")
 
-        # Oyun bilgilerini kaydet
-        game_info = extract_game_info_from_message(msg.text)
-        if game_info['game_number']:
-            game_results[game_info['game_number']] = game_info
-            print(f"💾 Oyun #{game_info['game_number']} kaydedildi")
-
-        # Martingale kontrolü
-        await check_martingale_trackers()
-
-        # Ardışık kayıp kontrolü
-        if performance_stats['consecutive_losses'] >= 3:
-            print("🔴 Sistem durduruldu - 3+ ardışık kayıp")
-            return
-
-        # Kart kontrolü - parantez içinde kart varsa
-        if re.search(r'\(([^)]+)\)', msg.text):
-            arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
-            print(f"📍 Ok konumu - Oyuncu: {arrow_player}, Banker: {arrow_banker}")
-
-            # 👉 banker tarafındaysa veya final işareti varsa işlem yap
-            if arrow_banker or any(indicator in msg.text for indicator in ['✅', '🔰', '#X']):
-                suits = extract_player_suits(msg.text)
-                if suits:
-                    print(f"🎯 Banker tarafında veya final - #{game_num} işleniyor...")
-                    await process_bet(game_num, msg, suits)
-                else:
-                    print(f"❌ Suit bulunamadı - #{game_num}")
-            elif arrow_player:
-                # 👉 oyuncu tarafında → bekle
-                watched_incomplete[msg.id] = (game_num, msg)
-                print(f"⏳ Beklemede - #{game_num} oyuncu tarafında")
-            else:
-                # Ok yoksa ve final de değilse, bir şey yapma
-                print(f"🤷 Ok yok ve final değil - #{game_num} atlanıyor")
-                
-    except Exception as e:
-        print(f"❌ Mesaj işleme hatası: {e}")
-
-# ✅ Mesaj düzenlenince banker tarafına geçtiyse veya final olduysa işle
-@client.on(events.MessageEdited(chats=KANAL_KAYNAK_ID))
+# ✅ EKLENDİ: Mesaj düzenlenince banker tarafına geçtiyse işle
+@client.on(events.MessageEdited(chats=source_channel))
 async def on_message_edited(event):
     msg = event.message
     if not msg.text:
         return
 
-    print(f"✏️ DÜZENLENEN MESAJ: {msg.text[:100]}...")
+    games = [int(m1 or m2 or m3) for m1, m2, m3 in re.findall(game_number_pattern, msg.text)]
+    game_num = games[0] if games else 0
 
-    try:
-        # Oyun numarasını bul - TÜM FORMATLARI DENE
-        game_num = 0
-        game_num_match = re.search(r'#N(\d+)', msg.text)
-        if not game_num_match:
-            game_num_match = re.search(r'№(\d+)', msg.text)
-        if not game_num_match:
-            game_num_match = re.search(r'No\s*:\s*(\d+)', msg.text)
+    if msg.id in watched_incomplete:
+        arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
+        if arrow_banker:
+            suits = extract_player_suits(msg.text)
+            if suits:
+                await process_bet(game_num, msg, suits)
+                del watched_incomplete[msg.id]
+                print(f"[EDIT] ✅ #N{game_num} banker tarafına geçti → sonuç işlendi.")
+
+# Tüm mesajları game_results'a kaydetmek için
+@client.on(events.NewMessage(chats=source_channel))
+@client.on(events.MessageEdited(chats=source_channel))
+async def handle_all_messages(event):
+    msg = event.message
+    if not msg.text:
+        return
         
-        if game_num_match:
-            game_num = int(game_num_match.group(1))
-            print(f"🔢 Düzenlenen oyun #{game_num} bulundu")
-        else:
-            print("❌ Düzenlenen mesajda oyun numarası bulunamadı")
-            return
-
-        # Oyun bilgilerini kaydet
-        game_info = extract_game_info_from_message(msg.text)
-        if game_info['game_number']:
-            game_results[game_info['game_number']] = game_info
-            print(f"💾 Düzenlenen oyun #{game_info['game_number']} kaydedildi")
-
-        # Martingale kontrolü
+    game_info = extract_game_info_from_message(msg.text)
+    if game_info['game_number']:
+        game_results[game_info['game_number']] = game_info
         await check_martingale_trackers()
-
-        # Eğer bu mesajı daha önceden izliyorsak (oyuncu tarafındaydı) ve şimdi banker tarafına geçtiyse veya final olduysa
-        if msg.id in watched_incomplete:
-            arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
-            # Banker tarafına geçtiyse veya final işareti varsa
-            if arrow_banker or any(indicator in msg.text for indicator in ['✅', '🔰', '#X']):
-                suits = extract_player_suits(msg.text)
-                if suits:
-                    await process_bet(game_num, msg, suits)
-                    del watched_incomplete[msg.id]
-                    print(f"✅ Düzenleme sonucu - #{game_num} banker tarafına geçti veya final oldu")
-        else:
-            # Eğer izleme listesinde değilse ama final sonucu geldiyse, direkt işle
-            arrow_player, arrow_banker = is_arrow_on_player_side(msg.text)
-            if arrow_banker or any(indicator in msg.text for indicator in ['✅', '🔰', '#X']):
-                suits = extract_player_suits(msg.text)
-                if suits:
-                    print(f"🎯 Düzenlenen mesajda final - #{game_num} işleniyor...")
-                    await process_bet(game_num, msg, suits)
-                    
-    except Exception as e:
-        print(f"❌ Düzenlenen mesaj işleme hatası: {e}")
 
 # Telegram Komutları
 @client.on(events.NewMessage(pattern='/start'))
@@ -450,11 +383,10 @@ async def active_command(event):
 if __name__ == '__main__':
     print("🤖 Baccarat Bot Başlatılıyor...")
     print("📡 Kanallar:")
-    print(f"   Kaynak: {KANAL_KAYNAK_ID}")
+    print(f"   Kaynak: {source_channel}")
     print(f"   Hedef: {KANAL_HEDEF}")
     print("🎯 Patternler: #C2_3, #C3_2, #C3_3")
     print("⚡ Martingale: 3 adım")
-    print("🔍 Oyun numarası formatları: #N, №, No:")
     
     with client:
         client.run_until_disconnected()
