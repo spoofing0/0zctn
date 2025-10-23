@@ -129,8 +129,6 @@ def extract_game_info_from_message(text):
         # Oyun numarasını çıkar - TÜM FORMATLARI DENE
         game_num_match = re.search(r'#N(\d+)', text)
         if not game_num_match:
-            game_num_match = re.search(r'№(\d+)', text)  № formatı
-        if not game_num_match:
             game_num_match = re.search(r'No\s*:\s*(\d+)', text)
         
         if game_num_match:
@@ -299,8 +297,6 @@ async def on_new_message(event):
         game_num = 0
         game_num_match = re.search(r'#N(\d+)', msg.text)
         if not game_num_match:
-            game_num_match = re.search(r'№(\d+)', msg.text)  # № formatı
-        if not game_num_match:
             game_num_match = re.search(r'No\s*:\s*(\d+)', msg.text)
         
         if game_num_match:
@@ -358,8 +354,6 @@ async def on_message_edited(event):
         # Oyun numarasını bul - TÜM FORMATLARI DENE
         game_num = 0
         game_num_match = re.search(r'#N(\d+)', msg.text)
-        if not game_num_match:
-            game_num_match = re.search(r'№(\d+)', msg.text)  # № formatı
         if not game_num_match:
             game_num_match = re.search(r'No\s*:\s*(\d+)', msg.text)
         
@@ -445,7 +439,7 @@ if __name__ == '__main__':
     print(f"   Hedef: {KANAL_HEDEF}")
     print("🎯 Patternler: #C2_3, #C3_2, #C3_3")
     print("⚡ Martingale: 3 adım")
-    print("🔍 Oyun numarası formatları: #N, №, No:")
+    print("🔍 Oyun numarası formatları: #N, No:")
     
     with client:
         client.run_until_disconnected()
