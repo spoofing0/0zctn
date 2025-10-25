@@ -28,7 +28,7 @@ is_signal_active = False
 MAX_CONSECUTIVE_LOSSES = 5  # Maksimum ardışık kayıp limiti
 COOLDOWN_AFTER_LOSS = 3     # Kayıptan sonra kaç oyun bekleyecek
 
-# İstatistikler
+# İstatistikler - SIFIRDAN BAŞLIYOR
 performance_stats = {
     'total_signals': 0,
     'wins': 0,
@@ -250,6 +250,7 @@ async def start_command(event):
 **Komutlar:** /start, /help, /stats, /status, /patterns, /active, /analysis, /reset, /martingale_stats, /max_step
 **Strateji:** 7 adım Martingale + Strict pattern filtreleme
 **Güvenlik:** 5 ardışık kayıp limiti + Cooldown sistemi
+**İstatistik:** SIFIRDAN BAŞLIYOR! 🔄
 """)
 
 @client.on(events.NewMessage(pattern='/stats'))
@@ -355,8 +356,15 @@ async def martingale_stats_command(event):
         distribution_text = "Henüz veri yok"
     
     total_games = total_wins + performance_stats['losses']
+    win_rate = (total_wins / total_games * 100) if total_games > 0 else 0
     
-    await event.reply(f"""
+    # Ortalama adım hesaplamasını ayrı yap
+    total_steps = sum(step * count for step, count in step_distribution.items())
+    average_step = total_steps / total_wins if total_wins > 0 else 0
+    
+    martingale_structure = MAX_MARTINGALE_STEPS + 1
+    
+    message_text = f"""
 📊 **Martingale İstatistikleri:**
 
 🎯 **En Yüksek Adım:** {performance_stats['max_martingale_steps_reached']}. adım
@@ -367,14 +375,14 @@ async def martingale_stats_command(event):
 📊 **Genel İstatistikler:**
 Toplam Sinyal: {total_games}
 Kazanç: {total_wins} | Kayıp: {performance_stats['losses']}
-Kazanç Oranı: {(total_wins/total_games*100) if total_games > 0 else 0:.1f}%
+Kazanç Oranı: {win_rate:.1f}%
 
-💡 **Ortalama Kazanç Adımı:** {
-    sum(step * count for step, count in step_distribution.items()) / total_wins if total_wins > 0 else 0:.1f
-}. adım
+💡 **Ortalama Kazanç Adımı:** {average_step:.1f}. adım
 
-🔢 **Martingale Yapısı:** {MAX_MARTINGALE_STEPS + 1} adım (1-{MAX_MARTINGALE_STEPS + 1})
-""")
+🔢 **Martingale Yapısı:** {martingale_structure} adım (1-{martingale_structure})
+"""
+    
+    await event.reply(message_text)
 
 @client.on(events.NewMessage(pattern='/max_step'))
 async def max_step_command(event):
@@ -393,15 +401,19 @@ async def max_step_command(event):
     else:
         reaction = "⚠️ DİKKAT! Yüksek adımlara çıkılmış"
     
-    await event.reply(f"""
+    martingale_structure = MAX_MARTINGALE_STEPS + 1
+    
+    message_text = f"""
 🔥 **En Yüksek Martingale Adımı:**
 
 🎯 **Rekor:** {max_step}. adım
 📊 **Toplam Kazanç:** {total_wins} sinyal
 💬 **Durum:** {reaction}
 
-ℹ️ _Sistem {MAX_MARTINGALE_STEPS + 1} adım martingale kullanıyor_
-""")
+ℹ️ _Sistem {martingale_structure} adım martingale kullanıyor_
+"""
+    
+    await event.reply(message_text)
 
 # Mesaj İşleyici
 @client.on(events.NewMessage(chats=KANAL_KAYNAK_ID))
@@ -434,7 +446,9 @@ async def handle_source_channel_message(event):
 
 if __name__ == '__main__':
     print("🤖 Baccarat Bot Geliştirilmiş Sürüm Başlatılıyor...")
+    print(f"📊 İstatistikler SIFIRDAN başlıyor!")
     print(f"🎯 Martingale: {MAX_MARTINGALE_STEPS+1} adım")
     print(f"🛡️  Güvenlik: {MAX_CONSECUTIVE_LOSSES} max kayıp, {COOLDOWN_AFTER_LOSS} cooldown")
+    
     with client:
         client.run_until_disconnected()
