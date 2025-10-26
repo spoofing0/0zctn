@@ -62,9 +62,12 @@ PATTERN_STRENGTH = {
 }
 
 def get_baccarat_value(card_char):
-    if card_char == '10': return 10
-    if card_char in 'AKQJ2T': return 0
-    elif card_char.isdigit(): return int(card_char)
+    if card_char == '10': 
+        return 10
+    if card_char in 'AKQJT':  # T ve J eklendi
+        return 0
+    elif card_char.isdigit(): 
+        return int(card_char)
     return -1
 
 def get_next_game_number(current_game_num):
@@ -72,25 +75,53 @@ def get_next_game_number(current_game_num):
     return 1 if next_num > MAX_GAME_NUMBER else next_num
 
 def extract_largest_value_suit(cards_str):
-    cards = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', cards_str)
-    if not cards or len(cards) < 2: return None
+    print(f"🔍 DEBUG - Kart analizi: {cards_str}")
+    
+    # Örnek input: "9(3♥️6♠️)" veya "4(6♦️8♥️Q♦️)"
+    # Parantez içindeki kartları al
+    cards_match = re.search(r'\(([^)]+)\)', cards_str)
+    if not cards_match:
+        print("❌ DEBUG - Parantez içi kart bulunamadı")
+        return None
+        
+    cards_content = cards_match.group(1)
+    print(f"🔍 DEBUG - Kart içeriği: {cards_content}")
+    
+    # Kartları ayır - emojiler ve sayılar
+    cards = re.findall(r'(\d+|[A-Z])([♦♥♠♣])', cards_content)
+    if not cards:
+        print("❌ DEBUG - Kartlar parse edilemedi")
+        return None
+        
+    print(f"🔍 DEBUG - Ayrılmış kartlar: {cards}")
 
     max_value = -1
     largest_value_suit = None
-    values = [get_baccarat_value(card[0]) for card in cards]
-    
-    # Aynı değerde kartlar varsa sinyal verme
-    if len(values) == 2 and values[0] == values[1]: return None
-    # 3 kart durumunda en az 2 farklı değer olmalı
-    if len(values) == 3 and len(set(values)) < 2: return None
+    values = []
 
     for card_char, suit in cards:
         value = get_baccarat_value(card_char)
+        values.append(value)
+        print(f"🔍 DEBUG - Kart: {card_char}{suit} -> Değer: {value}")
+        
         if value > max_value:
             max_value = value
             largest_value_suit = suit
+            print(f"🔍 DEBUG - Yeni max: {value} -> Renk: {suit}")
 
-    return None if max_value == 0 else largest_value_suit
+    # Aynı değerde kartlar varsa sinyal verme
+    if len(values) == 2 and values[0] == values[1]:
+        print("❌ DEBUG - Aynı değerde kartlar, sinyal yok")
+        return None
+        
+    # 3 kart durumunda en az 2 farklı değer olmalı
+    if len(values) == 3 and len(set(values)) < 2:
+        print("❌ DEBUG - 3 kartta yeterli çeşitlilik yok")
+        return None
+
+    result = None if max_value == 0 else largest_value_suit
+    print(f"🔍 DEBUG - Sinyal sonucu: {result}")
+    return result
 
 def extract_game_info_from_message(text):
     game_info = {
@@ -99,55 +130,79 @@ def extract_game_info_from_message(text):
         'has_strong_indicator': False
     }
     
-    # Pattern tespiti - GENİŞLETİLMİŞ 🆕
+    print(f"🔍 DEBUG - Gelen mesaj: {text}")
+    
+    # Pattern tespiti - GENİŞLETİLMİŞ
     detected_patterns = [p for p in STRONG_PATTERNS if p in text]
     game_info['patterns'] = detected_patterns
     game_info['pattern_strength'] = sum(PATTERN_STRENGTH.get(p, 0) for p in detected_patterns)
 
-    # Güçlü indikatör kontrolü - GENİŞLETİLMİŞ 🆕
-    strong_indicators = ['✅', '🔰', '#X', '⭐', '🔥', '#R', '#П1']
+    # Güçlü indikatör kontrolü - GENİŞLETİLMİŞ
+    strong_indicators = ['✅', '🔰', '#X', '⭐', '🔥', '#R', '#П1', '⚡', '🔺', '🟢', '🔵']
     game_info['has_strong_indicator'] = any(indicator in text for indicator in strong_indicators)
 
-    # Oyun bilgilerini çıkar
-    game_match = re.search(r'#N(\d+)\s+.*?\((.*?)\)\s+.*?(\d+\s+\(.*\))', text.replace('️', ''), re.DOTALL)
+    # FİNAL MANTIĞINI DEĞİŞTİR: Pattern gücü 4+ VE güçlü indikatör varsa final
+    game_info['is_final'] = game_info['pattern_strength'] >= 4 and game_info['has_strong_indicator']
+
+    # YENİ REGEX PATTERN - Mevcut formata uygun
+    pattern = r'#n(\d+).*?(\d+\([^)]+\)).*?(\d+\([^)]+\))'
+    
+    game_match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
     if game_match:
         game_info['game_number'] = int(game_match.group(1))
         game_info['player_cards'] = game_match.group(2)
         game_info['banker_cards'] = game_match.group(3)
-        if game_info['has_strong_indicator']:
-            game_info['is_final'] = True
+        print(f"✅ DEBUG - Regex eşleşti: Oyun#{game_info['game_number']}")
+        print(f"✅ DEBUG - Player: {game_info['player_cards']}")
+        print(f"✅ DEBUG - Banker: {game_info['banker_cards']}")
+    else:
+        print(f"❌ DEBUG - Regex eşleşmedi")
     
     return game_info
 
 def should_send_signal(game_info):
+    print(f"🔍 DEBUG - Sinyal kontrolü başladı")
+    
     # Cooldown modu kontrolü
     if performance_stats['cooldown_mode']:
         if performance_stats['games_since_last_loss'] >= COOLDOWN_AFTER_LOSS:
             performance_stats['cooldown_mode'] = False
             performance_stats['games_since_last_loss'] = 0
+            print(f"✅ DEBUG - Cooldown bitti")
         else:
+            print(f"⏳ DEBUG - Cooldown aktif: {performance_stats['games_since_last_loss']}/{COOLDOWN_AFTER_LOSS}")
             return False, "Cooldown modu aktif"
     
     # Güvenlik kontrolleri
     if performance_stats['consecutive_losses'] >= MAX_CONSECUTIVE_LOSSES:
+        print(f"🔴 DEBUG - Sistem durduruldu: {performance_stats['consecutive_losses']} kayıp")
         return False, f"Maksimum {MAX_CONSECUTIVE_LOSSES} ardışık kayıp - sistem durduruldu"
     
     if not game_info['patterns']: 
+        print(f"❌ DEBUG - Pattern yok")
         return False, "Güçlü pattern yok"
     
     if not game_info['is_final']: 
+        print(f"❌ DEBUG - Final değil")
         return False, "Final değil"
     
     if game_info['pattern_strength'] < 4:  # Minimum pattern gücü
+        print(f"❌ DEBUG - Pattern gücü yetersiz: {game_info['pattern_strength']}")
         return False, "Pattern gücü yetersiz"
     
     # Kart analizi
     signal_suit = extract_largest_value_suit(game_info['player_cards'])
-    return (True, signal_suit) if signal_suit else (False, "Uygun kart yok")
+    if signal_suit:
+        print(f"✅ DEBUG - Sinyal uygun: {signal_suit}")
+        return True, signal_suit
+    else:
+        print(f"❌ DEBUG - Uygun kart yok")
+        return False, "Uygun kart yok"
 
 async def send_optimized_signal(game_num, signal_suit, game_info):
     global is_signal_active, performance_stats
     if is_signal_active: 
+        print(f"⏳ DEBUG - Zaten aktif sinyal var")
         return
     
     performance_stats['total_signals'] += 1
@@ -164,6 +219,7 @@ async def send_optimized_signal(game_num, signal_suit, game_info):
     signal_full_text = f"**#N{game_num} - Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS+1}D - {signal_type}**"
 
     try:
+        print(f"🚀 DEBUG - Sinyal gönderiliyor: {signal_full_text}")
         sent_message = await client.send_message(KANAL_HEDEF, signal_full_text)
         print(f"🎯 SİNYAL: {signal_full_text}")
         martingale_trackers[game_num] = {
@@ -176,7 +232,7 @@ async def send_optimized_signal(game_num, signal_suit, game_info):
         }
         is_signal_active = True
     except Exception as e: 
-        print(f"Sinyal hatası: {e}")
+        print(f"❌ Sinyal hatası: {e}")
 
 async def check_martingale_trackers():
     global martingale_trackers, is_signal_active, performance_stats
@@ -210,8 +266,9 @@ async def check_martingale_trackers():
             win_text = f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ✅ {win_step}️⃣**"
             try: 
                 await tracker_info['message_obj'].edit(win_text)
+                print(f"✅ Kazanç: {win_text}")
             except Exception as e: 
-                print(f"Mesaj düzenleme hatası: {e}")
+                print(f"❌ Mesaj düzenleme hatası: {e}")
             trackers_to_remove.append(signal_game_num)
             is_signal_active = False
         else:
@@ -223,8 +280,9 @@ async def check_martingale_trackers():
                     await tracker_info['message_obj'].edit(
                         f"**#N{signal_game_num} - {tracker_info['signal_suit']} - {MAX_MARTINGALE_STEPS+1}D | 🔄 {next_step}️⃣**"
                     )
+                    print(f"🔄 Martingale devam: {next_step}. adım")
                 except Exception as e: 
-                    print(f"Mesaj düzenleme hatası: {e}")
+                    print(f"❌ Mesaj düzenleme hatası: {e}")
             else:
                 # Kayıp durumunda maksimum adımı güncelle
                 performance_stats['max_martingale_steps_reached'] = max(
@@ -243,8 +301,9 @@ async def check_martingale_trackers():
                 
                 try: 
                     await tracker_info['message_obj'].edit(f"**#N{signal_game_num} - {tracker_info['signal_suit']} | ❌**")
+                    print(f"❌ Kayıp: #{signal_game_num}")
                 except Exception as e: 
-                    print(f"Mesaj düzenleme hatası: {e}")
+                    print(f"❌ Mesaj düzenleme hatası: {e}")
                 trackers_to_remove.append(signal_game_num)
                 is_signal_active = False
 
@@ -427,21 +486,96 @@ async def max_step_command(event):
     
     await event.reply(message_text)
 
+@client.on(events.NewMessage(pattern='/test_current'))
+async def test_current_command(event):
+    """Mevcut mesajları test et"""
+    test_messages = [
+        "🔵#n696\n ✅9(3♥️6♠️) - 7(7♦️J♣️)\n #B #R #T16 #П1 #C2_2 #F1 #S41 #O3 #O6  #L4",
+        "🟢#n699\n 4(6♦️8♥️Q♦️) - ✅5(6♣️9♣️)\n #T9 #П2 #C3_2 #TM9 #И_М5 #S343 #O6 #O8 #O12   #K5 #m38"
+    ]
+    
+    results = []
+    for i, msg in enumerate(test_messages):
+        game_info = extract_game_info_from_message(msg)
+        should_send, reason = should_send_signal(game_info)
+        
+        results.append(f"{i+1}. {'✅' if should_send else '❌'} - {reason}")
+        results.append(f"   Oyun: #{game_info['game_number']}")
+        results.append(f"   Player: {game_info['player_cards']}")
+        results.append(f"   Final: {game_info['is_final']}")
+        results.append(f"   Patternler: {game_info['patterns']}")
+        results.append("---")
+
+    await event.reply("🧪 **Mevcut Format Testi:**\n" + "\n".join(results))
+
+@client.on(events.NewMessage(pattern='/debug_message'))
+async def debug_message_command(event):
+    """Son mesajı debug et"""
+    try:
+        # Son 10 mesajı al
+        messages = await client.get_messages(KANAL_KAYNAK_ID, limit=10)
+        
+        debug_info = "🔍 **SON 10 MESAJ DEBUG:**\n\n"
+        
+        for i, msg in enumerate(messages):
+            debug_info += f"**{i+1}. Mesaj:**\n"
+            debug_info += f"```{msg.text}```\n"
+            
+            game_info = extract_game_info_from_message(msg.text)
+            debug_info += f"• Oyun No: {game_info['game_number']}\n"
+            debug_info += f"• Patternler: {game_info['patterns']}\n"
+            debug_info += f"• Pattern Gücü: {game_info['pattern_strength']}\n"
+            debug_info += f"• Final: {game_info['is_final']}\n"
+            debug_info += f"• Player: {game_info['player_cards']}\n"
+            debug_info += f"• Sinyal Uygun: {extract_largest_value_suit(game_info['player_cards'])}\n"
+            debug_info += "---\n"
+        
+        await event.reply(debug_info)
+        
+    except Exception as e:
+        await event.reply(f"❌ Debug hatası: {e}")
+
+@client.on(events.NewMessage(pattern='/force_signal'))
+async def force_signal_command(event):
+    """Zorla sinyal gönder"""
+    try:
+        # Mevcut son oyunu kullan
+        last_game_num = list(game_results.keys())[-1] if game_results else 1000
+        next_game_num = get_next_game_number(last_game_num)
+        
+        force_signal = f"**#N{next_game_num} - Oyuncu ♥ - 7D - ⚡ MANUEL SİNYAL**"
+        await client.send_message(KANAL_HEDEF, force_signal)
+        await event.reply(f"✅ Manuel sinyal gönderildi: #{next_game_num}")
+        print(f"✅ Manuel sinyal başarıyla gönderildi: #{next_game_num}")
+    except Exception as e:
+        error_msg = f"❌ Manuel sinyal hatası: {e}"
+        await event.reply(error_msg)
+        print(error_msg)
+
 # Mesaj İşleyici
 @client.on(events.NewMessage(chats=KANAL_KAYNAK_ID))
 @client.on(events.MessageEdited(chats=KANAL_KAYNAK_ID))
 async def handle_source_channel_message(event):
+    print(f"🔔 YENİ MESAJ YAKALANDI!")
+    print(f"📝 Mesaj içeriği: {event.message.text}")
+    print(f"👤 Gönderen: {event.message.sender_id}")
+    print(f"🕒 Zaman: {event.message.date}")
+    
     # Cooldown modunda ise sayaç artır
     if performance_stats['cooldown_mode']:
         performance_stats['games_since_last_loss'] += 1
+        print(f"⏳ Cooldown sayacı: {performance_stats['games_since_last_loss']}")
     
     # Sistem durdurulmuşsa çık
     if performance_stats['consecutive_losses'] >= MAX_CONSECUTIVE_LOSSES:
+        print("🔴 Sistem durduruldu - maksimum kayıp limiti")
         return
     
     text = re.sub(r'\*\*', '', event.message.text).strip()
     game_info = extract_game_info_from_message(text)
+    
     if not game_info['game_number']: 
+        print("❌ Oyun numarası bulunamadı - çıkılıyor")
         return
     
     game_results[game_info['game_number']] = game_info
@@ -449,12 +583,14 @@ async def handle_source_channel_message(event):
     
     if not is_signal_active:
         should_send, reason = should_send_signal(game_info)
+        print(f"🎯 SİNYAL KARARI: {should_send} - Sebep: {reason}")
+        
         if should_send:
             next_game_num = get_next_game_number(game_info['game_number'])
+            print(f"🚀 SİNYAL GÖNDERİLİYOR: #{next_game_num} - {reason}")
             await send_optimized_signal(next_game_num, reason, game_info)
         else:
-            # Debug için neden sinyal gönderilmediğini yazdır
-            print(f"⏭️ Sinyal atlandı: {reason} | Oyun: #{game_info['game_number']}")
+            print(f"⏭️ SİNYAL ATLANDI: {reason} | Oyun: #{game_info['game_number']}")
 
 if __name__ == '__main__':
     print("🤖 Baccarat Bot Geliştirilmiş Sürüm Başlatılıyor...")
