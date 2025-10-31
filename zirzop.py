@@ -15,7 +15,7 @@ API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
 KANAL_KAYNAK_ID = -1001626824569  # 🆕 YENİ KANAL ID
 KANAL_HEDEF = "@royalbaccfree"
 
-client = TelegramClient('lvbel_bot', API_ID, API_HASH)
+client = TelegramClient('zirzop_bot', API_ID, API_HASH)
 
 # ==============================================================================
 # Global Değişkenler ve Takip Mekanizmaları
