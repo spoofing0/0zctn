@@ -201,7 +201,6 @@ def http_yükü_oluştur():
 
 # 📊 İstatistik kutusu gösterme
 def istatistik_göster():
-    system('clear')
     print("╔════════════════════════════════════════════════╗")
     print("║           🚀 OZCTN SECURITY TOOL v3.0         ║")
     print("║           🔥 ENHANCED IPTABLES MODE           ║")
