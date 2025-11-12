@@ -141,10 +141,11 @@ class EczaneBot:
     def run(self):
         app = Application.builder().token(self.token).build()
         
+        # Sadece İngilizce karakterli komutlar
         app.add_handler(CommandHandler("start", self.start))
         app.add_handler(CommandHandler("nobetci", self.nobetci))
         app.add_handler(CommandHandler("eczane", self.nobetci))
-        app.add_handler(CommandHandler("nöbetci", self.nobetci))
+        # "nöbetci" komutunu kaldırdım (Türkçe karakter hatası)
         
         print("🤖 Eczane Botu çalışıyor...")
         app.run_polling()
