@@ -13,7 +13,7 @@ API_HASH = '30b6658a1870f8462108130783fef14f'
 
 # --- Kanal Bilgileri ---
 KANAL_KAYNAK_ID = -1001626824569
-KANAL_HEDEF = "@emirbot5"
+KANAL_HEDEF = "@ornekbot5"
 
 client = TelegramClient('my_new_baccarat_bot', API_ID, API_HASH)
 
@@ -257,4 +257,5 @@ async def handle_source_channel_message(event):
 if __name__ == '__main__':
     print("Bot başlatılıyor...")
     with client:
+
         client.run_until_disconnected()
