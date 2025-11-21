@@ -9,11 +9,11 @@ from datetime import datetime
 # ==============================================================================
 # Telegram API Bilgileri ve Kanal Ayarları
 # ==============================================================================
-API_ID = 29581698
-API_HASH = '0caabd4263f1d4e5f753659a787c2e7d'
+API_ID = 27518940
+API_HASH = '30b6658a1870f8462108130783fef14f'
 
 # --- Kanal Bilgileri ---
-KANAL_KAYNAK_ID = -1001626824569 
+KANAL_KAYNAK_ID = -1001626824569
 KANAL_HEDEF = "@kbubakara"
 
 client = TelegramClient('kbu_baccarat_bot', API_ID, API_HASH)
@@ -25,23 +25,16 @@ game_results = {}
 MAX_MARTINGALE_STEPS = 7 # 0'dan 7'ye toplam 8 adım
 MAX_GAME_NUMBER = 1440
 
-# Her strateji için ayrı takipçiler - Tüm patternler hem Oyuncu hem Banker için
-c23_player_trackers = {}
-c23_banker_trackers = {}
-c32_player_trackers = {}
-c32_banker_trackers = {}
-c22_player_trackers = {}
-c22_banker_trackers = {}
-c33_player_trackers = {}
-c33_banker_trackers = {}
-color_trackers = {}  # Renk sadece Oyuncu için
+# Tüm stratejiler sadece OYUNCU için
+c23_trackers = {}
+c32_trackers = {}
+c22_trackers = {}
+c33_trackers = {}
+color_trackers = {}
 
 # Renk takip için global değişkenler
 last_colors = [] # Son renkleri tutacak liste (max 10)
 color_pattern_threshold = 3 # Renk değişimi için eşik
-
-# Kart sembollerinden rengi (suit) ayıran regex
-SUIT_REGEX = re.compile(r'([♣♦♥♠])')
 
 # ==============================================================================
 # Yardımcı Fonksiyonlar
@@ -68,12 +61,13 @@ def get_next_game_number(current_game_num):
         return 1
     return next_num
 
-def extract_largest_value_suit(cards_str):
+def extract_player_suit(player_cards_str):
     """
-    Oyuncu veya banker kartlarındaki en yüksek değerli kartın sembolünü döndürür.
+    Oyuncu kartlarındaki en yüksek değerli kartın sembolünü döndürür.
+    Oyuncu'nun 3 kartını da dikkate alır.
     """
-    # Tüm kartları bul (2 veya 3 kart)
-    cards = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', cards_str)
+    # Tüm oyuncu kartlarını bul (2 veya 3 kart)
+    cards = re.findall(r'(10|[A2-9TJQK])([♣♦♥♠])', player_cards_str)
     if not cards:
         return None
 
@@ -160,14 +154,12 @@ def get_random_suit_by_color(color):
 def check_color_pattern(player_cards, banker_cards, winner):
     """
     Renk desenini kontrol eder ve renk değişim sinyali üretir.
-    winner: 'player' veya 'banker'
+    Sadece OYUNCU için çalışır.
     """
     global last_colors
     
-    if winner == 'player':
-        suit = extract_largest_value_suit(player_cards)
-    else:
-        suit = extract_largest_value_suit(banker_cards)
+    # Sadece Oyuncu'nun kartlarını dikkate al
+    suit = extract_player_suit(player_cards)
     
     if not suit:
         return None
@@ -193,31 +185,19 @@ def check_color_pattern(player_cards, banker_cards, winner):
 async def send_signal(game_num, signal_suit, strategy_type):
     """Yeni sinyal gönderir ve ilgili stratejinin Martingale takibini başlatır."""
     
-    # Her strateji için ayrı mesaj formatı
-    if strategy_type == "c23_player":
+    # Tüm stratejiler sadece OYUNCU için
+    if strategy_type == "c23":
         signal_full_text = f"**#N{game_num} | Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
-        trackers_dict = c23_player_trackers
-    elif strategy_type == "c23_banker":
-        signal_full_text = f"**#N{game_num} | Banker {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
-        trackers_dict = c23_banker_trackers
-    elif strategy_type == "c32_player":
+        trackers_dict = c23_trackers
+    elif strategy_type == "c32":
         signal_full_text = f"**#N{game_num} | Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
-        trackers_dict = c32_player_trackers
-    elif strategy_type == "c32_banker":
-        signal_full_text = f"**#N{game_num} | Banker {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
-        trackers_dict = c32_banker_trackers
-    elif strategy_type == "c22_player":
+        trackers_dict = c32_trackers
+    elif strategy_type == "c22":
         signal_full_text = f"**#N{game_num} | Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
-        trackers_dict = c22_player_trackers
-    elif strategy_type == "c22_banker":
-        signal_full_text = f"**#N{game_num} | Banker {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
-        trackers_dict = c22_banker_trackers
-    elif strategy_type == "c33_player":
+        trackers_dict = c22_trackers
+    elif strategy_type == "c33":
         signal_full_text = f"**#N{game_num} | Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
-        trackers_dict = c33_player_trackers
-    elif strategy_type == "c33_banker":
-        signal_full_text = f"**#N{game_num} | Banker {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
-        trackers_dict = c33_banker_trackers
+        trackers_dict = c33_trackers
     elif strategy_type == "color":
         signal_full_text = f"**#N{game_num} | {signal_suit} - {MAX_MARTINGALE_STEPS}D**"
         trackers_dict = color_trackers
@@ -254,14 +234,10 @@ async def check_martingale_trackers():
     
     # Tüm strateji takipçilerini kontrol et
     for strategy_name, trackers_dict in [
-        ("C2_3 Oyuncu", c23_player_trackers),
-        ("C2_3 Banker", c23_banker_trackers),
-        ("C3_2 Oyuncu", c32_player_trackers),
-        ("C3_2 Banker", c32_banker_trackers), 
-        ("C2_2 Oyuncu", c22_player_trackers),
-        ("C2_2 Banker", c22_banker_trackers),
-        ("C3_3 Oyuncu", c33_player_trackers),
-        ("C3_3 Banker", c33_banker_trackers),
+        ("C2_3", c23_trackers),
+        ("C3_2", c32_trackers), 
+        ("C2_2", c22_trackers),
+        ("C3_3", c33_trackers),
         ("Renk", color_trackers)
     ]:
         await check_single_strategy_trackers(strategy_name, trackers_dict)
@@ -288,26 +264,9 @@ async def check_single_strategy_trackers(strategy_name, trackers_dict):
             continue
         
         player_cards_str = result_info['player_cards']
-        banker_cards_str = result_info['banker_cards']
         
-        # Kazananı belirle
-        winner = 'player' if '✅' in result_info.get('original_text', '') else 'banker'
-        
-        # Stratejiye göre kazanç kontrolü
-        signal_won_this_step = False
-        
-        if strategy_type in ["c23_player", "c32_player", "c22_player", "c33_player"]:
-            # Oyuncu stratejileri - oyuncu kartlarında sinyal rengi var mı?
-            signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
-        elif strategy_type in ["c23_banker", "c32_banker", "c22_banker", "c33_banker"]:
-            # Banker stratejileri - banker kartlarında sinyal rengi var mı?
-            signal_won_this_step = bool(re.search(re.escape(signal_suit), banker_cards_str))
-        elif strategy_type == "color":
-            # Renk stratejisi - kazanan tarafta sinyal rengi var mı? (sadece Oyuncu için)
-            if winner == 'player':
-                winning_suit = extract_largest_value_suit(player_cards_str)
-                if winning_suit:
-                    signal_won_this_step = (get_color_from_suit(winning_suit) == get_color_from_suit(signal_suit))
+        # Tüm stratejiler sadece OYUNCU kartlarını kontrol eder
+        signal_won_this_step = bool(re.search(re.escape(signal_suit), player_cards_str))
         
         print(f"DEBUG: {strategy_name} Sinyal #N{signal_game_num} (Adım {current_step}): Kazandı mı? {signal_won_this_step}")
 
@@ -315,10 +274,8 @@ async def check_single_strategy_trackers(strategy_name, trackers_dict):
             # Kazanma durumu
             if strategy_type == "color":
                 new_text = f"**#N{signal_game_num} | {signal_suit} - {MAX_MARTINGALE_STEPS}D | ✅ {current_step}️⃣**"
-            elif strategy_type.endswith('_player'):
+            else:
                 new_text = f"**#N{signal_game_num} | Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS}D | ✅ {current_step}️⃣**"
-            elif strategy_type.endswith('_banker'):
-                new_text = f"**#N{signal_game_num} | Banker {signal_suit} - {MAX_MARTINGALE_STEPS}D | ✅ {current_step}️⃣**"
             
             try:
                 await signal_message_obj.edit(new_text)
@@ -344,10 +301,8 @@ async def check_single_strategy_trackers(strategy_name, trackers_dict):
                 # Maksimum adıma ulaşıldı, kayıp
                 if strategy_type == "color":
                     new_text = f"**#N{signal_game_num} | {signal_suit} - {MAX_MARTINGALE_STEPS}D | ❌**"
-                elif strategy_type.endswith('_player'):
+                else:
                     new_text = f"**#N{signal_game_num} | Oyuncu {signal_suit} - {MAX_MARTINGALE_STEPS}D | ❌**"
-                elif strategy_type.endswith('_banker'):
-                    new_text = f"**#N{signal_game_num} | Banker {signal_suit} - {MAX_MARTINGALE_STEPS}D | ❌**"
                 
                 try:
                     await signal_message_obj.edit(new_text)
@@ -389,70 +344,39 @@ async def handle_source_channel_message(event):
     # Tüm stratejilerin takiplerini kontrol et
     await check_martingale_trackers()
 
-    # Tüm stratejiler bağımsız çalışır
+    # Tüm stratejiler sadece OYUNCU için ve bağımsız çalışır
     if game_info['is_final']:
         trigger_game_num = game_info['game_number']
         next_game_num = get_next_game_number(trigger_game_num)
         
-        # 1. C2_3 Stratejisi - Hem Oyuncu hem Banker
-        if game_info.get('is_c2_3'):
-            # Oyuncu için
-            if not c23_player_trackers:
-                signal_suit = extract_largest_value_suit(game_info['player_cards'])
-                if signal_suit is not None:
-                    await send_signal(next_game_num, signal_suit, "c23_player")
-            # Banker için
-            if not c23_banker_trackers:
-                signal_suit = extract_largest_value_suit(game_info['banker_cards'])
-                if signal_suit is not None:
-                    await send_signal(next_game_num, signal_suit, "c23_banker")
+        # 1. C2_3 Stratejisi - Sadece Oyuncu
+        if game_info.get('is_c2_3') and not c23_trackers:
+            signal_suit = extract_player_suit(game_info['player_cards'])
+            if signal_suit is not None:
+                await send_signal(next_game_num, signal_suit, "c23")
         
-        # 2. C3_2 Stratejisi - Hem Oyuncu hem Banker
-        if game_info.get('is_c3_2'):
-            # Oyuncu için
-            if not c32_player_trackers:
-                signal_suit = extract_largest_value_suit(game_info['player_cards'])
-                if signal_suit is not None:
-                    await send_signal(next_game_num, signal_suit, "c32_player")
-            # Banker için
-            if not c32_banker_trackers:
-                signal_suit = extract_largest_value_suit(game_info['banker_cards'])
-                if signal_suit is not None:
-                    await send_signal(next_game_num, signal_suit, "c32_banker")
+        # 2. C3_2 Stratejisi - Sadece Oyuncu
+        if game_info.get('is_c3_2') and not c32_trackers:
+            signal_suit = extract_player_suit(game_info['player_cards'])
+            if signal_suit is not None:
+                await send_signal(next_game_num, signal_suit, "c32")
         
-        # 3. C2_2 Stratejisi - Hem Oyuncu hem Banker
-        if game_info.get('is_c2_2'):
-            # Oyuncu için
-            if not c22_player_trackers:
-                signal_suit = extract_largest_value_suit(game_info['player_cards'])
-                if signal_suit is not None:
-                    await send_signal(next_game_num, signal_suit, "c22_player")
-            # Banker için
-            if not c22_banker_trackers:
-                signal_suit = extract_largest_value_suit(game_info['banker_cards'])
-                if signal_suit is not None:
-                    await send_signal(next_game_num, signal_suit, "c22_banker")
+        # 3. C2_2 Stratejisi - Sadece Oyuncu
+        if game_info.get('is_c2_2') and not c22_trackers:
+            signal_suit = extract_player_suit(game_info['player_cards'])
+            if signal_suit is not None:
+                await send_signal(next_game_num, signal_suit, "c22")
         
-        # 4. C3_3 Stratejisi - Hem Oyuncu hem Banker
-        if game_info.get('is_c3_3'):
-            # Oyuncu için
-            if not c33_player_trackers:
-                signal_suit = extract_largest_value_suit(game_info['player_cards'])
-                if signal_suit is not None:
-                    await send_signal(next_game_num, signal_suit, "c33_player")
-            # Banker için
-            if not c33_banker_trackers:
-                signal_suit = extract_largest_value_suit(game_info['banker_cards'])
-                if signal_suit is not None:
-                    await send_signal(next_game_num, signal_suit, "c33_banker")
+        # 4. C3_3 Stratejisi - Sadece Oyuncu
+        if game_info.get('is_c3_3') and not c33_trackers:
+            signal_suit = extract_player_suit(game_info['player_cards'])
+            if signal_suit is not None:
+                await send_signal(next_game_num, signal_suit, "c33")
         
-        # 5. Renk Stratejisi - Sadece Oyuncu için
+        # 5. Renk Stratejisi - Sadece Oyuncu
         if not color_trackers:
-            # Kazananı belirle
-            winner = 'player' if '✅' in cleaned_text else 'banker'
-            
-            # Renk desenini kontrol et
-            color_signal = check_color_pattern(game_info['player_cards'], game_info['banker_cards'], winner)
+            # Renk desenini kontrol et (sadece Oyuncu kartlarına göre)
+            color_signal = check_color_pattern(game_info['player_cards'], game_info['banker_cards'], 'player')
             
             if color_signal:
                 # Renk sinyali için rastgele bir kart sembolü seç
@@ -465,12 +389,9 @@ async def handle_source_channel_message(event):
 if __name__ == '__main__':
     print("Bot başlatılıyor...")
     print(f"Martingale adım sayısı: {MAX_MARTINGALE_STEPS}")
-    print("Aktif stratejiler:")
-    print("- C2_3: Oyuncu & Banker")
-    print("- C3_2: Oyuncu & Banker") 
-    print("- C2_2: Oyuncu & Banker")
-    print("- C3_3: Oyuncu & Banker")
-    print("- Renk: Sadece Oyuncu")
-    print("Tüm stratejiler bağımsız çalışır")
+    print("Aktif stratejiler: C2_3, C3_2, C2_2, C3_3, Renk Değişim")
+    print("TÜM stratejiler sadece OYUNCU için çalışır")
+    print("Oyuncu'nun 3 kartı da dikkate alınır")
+    print("Öncelik sistemi YOK - tüm stratejiler bağımsız çalışır")
     with client:
         client.run_until_disconnected()
