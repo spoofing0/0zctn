@@ -12,55 +12,30 @@ from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
 
 # ========================= KULLANICI AYARLARI =========================
-API_ID = int(os.environ.get("TELEGRAM_API_ID", "0"))
-API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
+API_ID = int(os.environ.get("TELEGRAM_API_ID", "29581698"))
+API_HASH = os.environ.get("TELEGRAM_API_HASH", "0caabd4263f1d4e5f753659a787c2e7d")
 SOURCE_CHANNEL = int(os.environ.get("SOURCE_CHANNEL_ID", "-1001626824569"))
 TARGET_CHANNEL = os.environ.get("TARGET_CHANNEL", "@KBBNowGoall")
 
 # Yönetici ID'leri — virgülle ayrılmış (örn: "123456789,987654321")
-ADMIN_IDS_RAW = os.environ.get("ADMIN_USER_IDS", "")
+ADMIN_IDS_RAW = os.environ.get("ADMIN_USER_IDS", "1136442929")
 ADMIN_IDS = set(int(x.strip()) for x in ADMIN_IDS_RAW.split(",") if x.strip().isdigit())
 
-SESSION_NAME = "player_delay_tracker"
+SESSION_NAME = "tombul_tombul"
 MAX_GAME_NUMBER = 1440
 
 # ========================= AYARLAR (config'ten yüklenir) =========================
-DYNAMIC_THRESHOLD_MULTIPLIER = 2.0
-MAX_MARTINGALE_STEPS = 3
+MAX_MARTINGALE_STEPS = 4
 AUTOSTOP_ENABLED = False
 AUTOSTOP_LIMIT = 3
-MIN_GAP = 2          # Minimum fark koşulu
-WARMUP_GAMES = 10    # Kaç oyun sonra sinyal üretilsin
 STREAK_NOTIFY = 3    # Kaç seriden sonra bildirim gelsin
 ANNOUNCE_MODE = True # False = sessiz mod (sinyal kanala gitmez, sadece log)
-CURRENT_MODE = "normal"  # agresif / normal / muhafazakar
 
-# ─── Strateji Mod Önayarları ───────────────────────────────────────────────────
-STRATEGY_MODES = {
-    "agresif": {
-        "dynamic_threshold_multiplier": 1.5,
-        "max_martingale_steps": 4,
-        "min_gap": 1,
-        "warmup_games": 7,
-        "label": "⚡ Agresif",
-        "desc": "Daha fazla sinyal, daha yüksek risk",
-    },
-    "normal": {
-        "dynamic_threshold_multiplier": 2.0,
-        "max_martingale_steps": 3,
-        "min_gap": 2,
-        "warmup_games": 10,
-        "label": "⚖️ Normal",
-        "desc": "Dengeli risk ve sinyal sıklığı",
-    },
-    "muhafazakar": {
-        "dynamic_threshold_multiplier": 3.0,
-        "max_martingale_steps": 2,
-        "min_gap": 3,
-        "warmup_games": 15,
-        "label": "🛡️ Muhafazakar",
-        "desc": "Az sinyal, yüksek güven koşulu",
-    },
+# ─── Bakara Kart Değerleri ─────────────────────────────────────────────────────
+BACCARAT_VALUES = {
+    'A': 1, '2': 2, '3': 3, '4': 4, '5': 5,
+    '6': 6, '7': 7, '8': 8, '9': 9,
+    '10': 0, 'J': 0, 'Q': 0, 'K': 0,
 }
 
 # ─── Hata Kaydı ────────────────────────────────────────────────────────────────
@@ -74,10 +49,7 @@ bot_paused = False
 client = None
 
 last_processed_game = None
-last_processed_cards = ""
 game_count = 0
-
-suit_delays = {'♣': 0, '♦': 0, '♥': 0, '♠': 0}
 
 stats = {"total_signals": 0, "correct": 0, "wrong": 0}
 suit_stats = {
@@ -90,7 +62,7 @@ current_streak = 0
 daily_stats = {"date": datetime.now().strftime("%Y-%m-%d"), "correct": 0, "wrong": 0, "total": 0}
 signal_history = []  # Son 20 sinyal geçmişi
 bot_start_time = datetime.now()
-SIGNAL_COOLDOWN = 0  # Sinyaller arası zorunlu bekleme (dakika), 0 = kapalı
+SIGNAL_COOLDOWN = 0
 last_signal_time = None
 suit_signal_count = {'♣': 0, '♦': 0, '♥': 0, '♠': 0}  # Bugün kaç kez sinyal üretildi
 
@@ -240,7 +212,10 @@ def get_next_game(n):
     return 1 if n + 1 > MAX_GAME_NUMBER else n + 1
 
 def clean_text(t):
-    t = re.sub(r'[\uFE00-\uFE0F]', '', t)
+    t = re.sub(r'[\uFE00-\uFE0F]', '', t)      # emoji varyasyon seçicileri
+    t = re.sub(r'\*\*([^*]*)\*\*', r'\1', t)   # **bold** → düz metin
+    t = re.sub(r'__([^_]*)__', r'\1', t)        # __underline__ → düz metin
+    t = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', t)  # [metin](url) → metin
     t = re.sub(r'\s+', ' ', t)
     return t.strip()
 
@@ -249,20 +224,6 @@ def split_cards(card_str):
         return []
     return re.findall(r'(\d+|J|Q|K|A)\s*([♣♦♥♠])', card_str)
 
-def extract_game_info(text):
-    text = clean_text(text)
-    info = {"game_number": None, "player_cards": "", "is_final": False}
-    m = re.search(r'(?:#N|№)\s*(\d+)', text)
-    if not m:
-        return info
-    info["game_number"] = int(m.group(1))
-    parts = re.findall(r'\(([^()]+)\)', text)
-    if len(parts) < 2:
-        return info
-    info["player_cards"] = parts[0].strip()
-    if '⏱' not in text and ('WinWin' in text or 'Melbet' in text or '✅' in text or '#X' in text):
-        info["is_final"] = True
-    return info
 
 def check_daily_reset():
     global daily_stats
@@ -287,7 +248,7 @@ def load_stats():
     global stats, suit_stats, current_streak, daily_stats, signal_history
     if os.path.exists(STATS_FILE):
         try:
-            with open(STATS_FILE, 'r') as f:
+            with open(STATS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 stats.update(data.get("general", data))
                 if "suit_stats" in data:
@@ -304,7 +265,7 @@ def load_stats():
 
 def save_stats():
     try:
-        with open(STATS_FILE, 'w') as f:
+        with open(STATS_FILE, 'w', encoding='utf-8') as f:
             json.dump({
                 "general": stats,
                 "suit_stats": suit_stats,
@@ -316,24 +277,19 @@ def save_stats():
         log(f"İstatistik kaydedilemedi: {e}")
 
 def load_config():
-    global DYNAMIC_THRESHOLD_MULTIPLIER, MAX_MARTINGALE_STEPS
-    global AUTOSTOP_ENABLED, AUTOSTOP_LIMIT, MIN_GAP, WARMUP_GAMES
-    global STREAK_NOTIFY, ANNOUNCE_MODE, SIGNAL_COOLDOWN, CURRENT_MODE
+    global MAX_MARTINGALE_STEPS, AUTOSTOP_ENABLED, AUTOSTOP_LIMIT
+    global STREAK_NOTIFY, ANNOUNCE_MODE, SIGNAL_COOLDOWN
     if os.path.exists(CONFIG_FILE):
         try:
-            with open(CONFIG_FILE, 'r') as f:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 cfg = json.load(f)
-                DYNAMIC_THRESHOLD_MULTIPLIER = cfg.get("dynamic_threshold_multiplier", 2.0)
-                MAX_MARTINGALE_STEPS = cfg.get("max_martingale_steps", 3)
+                MAX_MARTINGALE_STEPS = cfg.get("max_martingale_steps", 4)
                 AUTOSTOP_ENABLED = cfg.get("autostop_enabled", False)
                 AUTOSTOP_LIMIT = cfg.get("autostop_limit", 3)
-                MIN_GAP = cfg.get("min_gap", 2)
-                WARMUP_GAMES = cfg.get("warmup_games", 10)
                 STREAK_NOTIFY = cfg.get("streak_notify", 3)
                 ANNOUNCE_MODE = cfg.get("announce_mode", True)
                 SIGNAL_COOLDOWN = cfg.get("signal_cooldown", 0)
-                CURRENT_MODE = cfg.get("current_mode", "normal")
-            log(f"Config yüklendi — Mod:{CURRENT_MODE} | Çarpan:{DYNAMIC_THRESHOLD_MULTIPLIER}x | Katlama:{MAX_MARTINGALE_STEPS} | Gap:{MIN_GAP} | Warmup:{WARMUP_GAMES} | Cooldown:{SIGNAL_COOLDOWN}dk")
+            log(f"Config yüklendi — Katlama:{MAX_MARTINGALE_STEPS} | AutoStop:{AUTOSTOP_ENABLED} | Cooldown:{SIGNAL_COOLDOWN}dk")
         except Exception as e:
             log(f"Config yüklenemedi: {e}")
     else:
@@ -341,93 +297,152 @@ def load_config():
 
 def save_config():
     try:
-        with open(CONFIG_FILE, 'w') as f:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump({
-                "dynamic_threshold_multiplier": DYNAMIC_THRESHOLD_MULTIPLIER,
                 "max_martingale_steps": MAX_MARTINGALE_STEPS,
                 "autostop_enabled": AUTOSTOP_ENABLED,
                 "autostop_limit": AUTOSTOP_LIMIT,
-                "min_gap": MIN_GAP,
-                "warmup_games": WARMUP_GAMES,
                 "streak_notify": STREAK_NOTIFY,
                 "announce_mode": ANNOUNCE_MODE,
                 "signal_cooldown": SIGNAL_COOLDOWN,
-                "current_mode": CURRENT_MODE,
             }, f, indent=2)
     except Exception as e:
         log(f"Config kaydedilemedi: {e}")
 
-def update_delays_and_analyze(game_num, player_cards_str):
-    global suit_delays, last_processed_game, last_processed_cards, game_count
+def baccarat_card_value(rank):
+    return BACCARAT_VALUES.get(rank, 0)
 
-    if last_processed_game == game_num and last_processed_cards == player_cards_str:
+def baccarat_score(cards):
+    """cards: list of (rank, suit) tuples — ilk N kartın Bakara skorunu hesaplar"""
+    return sum(baccarat_card_value(r) for r, _ in cards) % 10
+
+def extract_full_game_info(text):
+    """Mesajdan oyun bilgilerini çıkarır — yeni strateji için geliştirilmiş parser"""
+    text = clean_text(text)
+    result = {
+        "game_number": None,
+        "is_final": False,
+        "is_tie": False,
+        "c2_2": False,
+        "winner_cards": [],
+        "all_cards_str": "",
+        "player_cards_str": "",  # Sol taraf (Oyuncu) kartları
+        "winner_initial_score": None,
+        "winner_drew_third": False,
+        "winner_third_suit": None,
+    }
+
+    m = re.search(r'(?:#N|№)\s*(\d+)', text)
+    if not m:
+        return result
+    result["game_number"] = int(m.group(1))
+
+    if '⏱' not in text and ('WinWin' in text or 'Melbet' in text or '✅' in text or '#X' in text):
+        result["is_final"] = True
+
+    if '#X' in text or '🔰' in text:
+        result["is_tie"] = True
+
+    if '#C2_2' in text:
+        result["c2_2"] = True
+
+    def parse_cards(card_str):
+        return re.findall(r'(10|[2-9JQKA])\s*([♣♦♥♠])', card_str)
+
+    all_parens = re.findall(r'\(([^)]+)\)', text)
+    result["all_cards_str"] = " ".join(all_parens)
+    result["player_cards_str"] = all_parens[0] if all_parens else ""  # Sol taraf = Oyuncu
+
+    m1 = re.search(r'✅\s*\d+\s*\(([^)]+)\)\s*-\s*\d+\s*\(([^)]+)\)', text)
+    if m1:
+        result["winner_cards"] = parse_cards(m1.group(1))
+    else:
+        m2 = re.search(r'\d+\s*\(([^)]+)\)\s*-\s*✅\s*\d+\s*\(([^)]+)\)', text)
+        if m2:
+            result["winner_cards"] = parse_cards(m2.group(2))
+
+    if not result["winner_cards"] and result["is_final"] and not result["is_tie"] and not result["c2_2"]:
+        first_line = text.split('\n')[0][:120]
+        log(f"🔍 Parse edilemeyen satır: {first_line}")
+
+    if result["winner_cards"] and len(result["winner_cards"]) >= 2:
+        result["winner_initial_score"] = baccarat_score(result["winner_cards"][:2])
+        if len(result["winner_cards"]) >= 3:
+            result["winner_drew_third"] = True
+            result["winner_third_suit"] = result["winner_cards"][2][1]
+
+    return result
+
+def analyze_new_strategy(game_info):
+    """
+    4 kural filtresi uygular, geçerse (hedef_oyun, renk) döndürür.
+    Kural 1 — #C2_2: her iki taraf da 2 kartla bitmişse → sistem dışı
+    Kural 2 — Beraberlik: #X veya 🔰 varsa → sistem dışı
+    Kural 3 — İlk skor 0: kazananın 2 kartlık skoru 0 ise → sistem dışı
+    Kural 4 — 3. kart yok: ilk skor > 0 ama kazanan 3. kart almamışsa → sistem dışı
+    """
+    gnum = game_info["game_number"]
+
+    if game_info["c2_2"]:
+        log(f"⛔ Kural 1 (#C2_2): #{gnum} — sistem dışı")
         return None
 
-    cards = split_cards(player_cards_str)
-    current_suits = {suit for _, suit in cards}
-
-    for suit in suit_delays.keys():
-        if suit in current_suits:
-            suit_delays[suit] = 0
-        else:
-            suit_delays[suit] += 1
-
-    last_processed_game = game_num
-    last_processed_cards = player_cards_str
-    game_count += 1
-
-    log(f"📊 #{game_num} ({game_count}) -> ♣:{suit_delays['♣']} ♦:{suit_delays['♦']} ♥:{suit_delays['♥']} ♠:{suit_delays['♠']}")
-
-    if game_count <= WARMUP_GAMES:
-        log(f"⏳ Veri birikimi: {game_count}/{WARMUP_GAMES} — sinyal yok.")
+    if game_info["is_tie"]:
+        log(f"⛔ Kural 2 (Beraberlik): #{gnum} — sistem dışı")
         return None
 
-    total_delay = sum(suit_delays.values())
-    average_delay = total_delay / 4.0
-    dynamic_threshold = average_delay * DYNAMIC_THRESHOLD_MULTIPLIER
-
-    sorted_delays = sorted(suit_delays.items(), key=lambda x: x[1], reverse=True)
-    best_suit, best_val = sorted_delays[0]
-    second_suit, second_val = sorted_delays[1]
-
-    log(f"📐 Eşik:{dynamic_threshold:.2f} | {best_suit}:{best_val} | {second_suit}:{second_val} | Fark:{best_val-second_val}")
-
-    if best_val < dynamic_threshold:
-        log(f"⏸️ Pas: {best_suit}:{best_val} < {dynamic_threshold:.2f}")
+    if not game_info["winner_cards"]:
+        log(f"⚠️ #{gnum} — kazanan kartı okunamadı, pas")
         return None
 
-    if (best_val - second_val) < MIN_GAP:
-        log(f"⚠️ Pas: Fark {best_val - second_val} < {MIN_GAP}")
+    initial_score = game_info["winner_initial_score"]
+    if initial_score is None:
         return None
 
-    log(f"✅ SİNYAL: {best_suit}")
-    return best_suit
+    if initial_score == 0:
+        log(f"⛔ Kural 3 (İlk skor 0): #{gnum} — sistem dışı")
+        return None
+
+    if not game_info["winner_drew_third"]:
+        log(f"⛔ Kural 4 (3. kart yok): #{gnum}, İlk Skor:{initial_score} — sistem dışı")
+        return None
+
+    target_game = gnum + initial_score
+    if target_game > MAX_GAME_NUMBER:
+        target_game = target_game - MAX_GAME_NUMBER
+
+    suit = game_info["winner_third_suit"]
+    log(f"✅ SİNYAL ADAYI: #{gnum} → Hedef #{target_game} | Renk:{suit} | İlk Skor:{initial_score}")
+    return (target_game, suit)
+
+# ========================= SUIT İSİMLERİ =========================
+SUIT_NAMES = {'♣': 'Sinek', '♦': 'Karo', '♥': 'Kupa', '♠': 'Maça'}
+
+def suit_label(suit):
+    return f"{suit}  {SUIT_NAMES.get(suit, '')}"
+
+def step_bar(current_step, max_steps):
+    filled = "🔵" * (current_step + 1)
+    empty  = "⚪" * (max_steps - current_step - 1)
+    labels = ["Giriş", "1. Katlama", "2. Katlama", "3. Katlama", "4. Katlama", "5. Katlama"]
+    label  = labels[current_step] if current_step < len(labels) else f"{current_step}. Katlama"
+    return f"{filled}{empty}  {label}"
 
 # ========================= SERİ BİLDİRİMLERİ =========================
 async def check_streak_notification(bot_client):
     global bot_paused
-    if current_streak >= STREAK_NOTIFY:
-        await bot_client.send_message(
-            TARGET_CHANNEL,
-            f"🔥 **{current_streak} Üst Üste Kazanç!**\n"
-            f"🏆 Strateji mükemmel çalışıyor!\n💪 Devam et!"
-        )
-    elif current_streak <= -STREAK_NOTIFY:
+    # Kazanç serisi bildirimi kaldırıldı — sadece AutoStop aktif
+    if current_streak <= -STREAK_NOTIFY:
         if AUTOSTOP_ENABLED and abs(current_streak) >= AUTOSTOP_LIMIT:
             bot_paused = True
             await bot_client.send_message(
                 TARGET_CHANNEL,
-                f"🛑 **AutoStop Devreye Girdi!**\n"
-                f"❌ {abs(current_streak)} üst üste kayıp.\n"
-                f"⏸️ Bot duraklatıldı. Devam için /resume yazın."
+                f"🛑 Sistem Durumu: Durduruldu\n"
+                f"🤖 Kayıp Serisi: {abs(current_streak)} Oyun\n"
+                f"⏸️ Kasa Koruması Devreye Girdi\n"
+                f"▸ Devam için: /resume"
             )
             log(f"🛑 AutoStop: {abs(current_streak)} kayıp serisi.")
-        else:
-            await bot_client.send_message(
-                TARGET_CHANNEL,
-                f"⚠️ **{abs(current_streak)} Üst Üste Kayıp!**\n"
-                f"🧠 Stratejiyi değerlendirin."
-            )
 
 # ========================= SİNYAL İŞLEMLERİ =========================
 async def send_signal(bot_client, game_num, suit):
@@ -441,12 +456,12 @@ async def send_signal(bot_client, game_num, suit):
             return False
 
     check_daily_reset()
-    mot_msg = random.choice(motivation_messages)
+    motivation = f"\n💬 {random.choice(motivation_messages)}" if current_streak < 0 else ""
     text = (
-        f"🤖 Oyun No: {game_num}\n"
-        f"⚡ Oyuncunun Serisi: {suit}\n"
-        f"🔁 Kasa Katlama: {MAX_MARTINGALE_STEPS} Oyun\n\n"
-        f"{mot_msg}"
+        f"🤖 Oyun No: #{game_num}\n"
+        f"🎯 Hedef Süit: {suit}  {SUIT_NAMES.get(suit, '')}\n"
+        f"🔁 Kasa Katlama: {MAX_MARTINGALE_STEPS} Oyun"
+        f"{motivation}"
     )
     try:
         if ANNOUNCE_MODE:
@@ -462,6 +477,7 @@ async def send_signal(bot_client, game_num, suit):
             "step": 0,
             "max_steps": MAX_MARTINGALE_STEPS,
             "expected_game": game_num,
+            "original_game": game_num,
         }
         is_signal_active = True
         last_signal_time = datetime.now()
@@ -489,19 +505,23 @@ async def update_signal_result(bot_client, game_num, won, player_cards):
     step = info["step"]
     max_steps = info["max_steps"]
 
+    original_game = info.get("original_game", game_num)
+    game_range = f"#{original_game} ➜ #{game_num}" if original_game != game_num else f"#{game_num}"
+
     if won:
         stats["correct"] += 1
         daily_stats["correct"] += 1
         suit_stats[expected]["correct"] += 1
         current_streak = current_streak + 1 if current_streak >= 0 else 1
         add_to_history(game_num, expected, True, step)
-        step_display = f"{step+1}️⃣" if step+1 <= 5 else f"{step+1}"
-        mot_msg = random.choice(motivation_messages)
+        step_icons = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
+        step_icon = step_icons[step] if step < len(step_icons) else f"{step+1}."
         new_text = (
-            f"✅ Kazandı!\n"
-            f"🤖 Oyun No: {game_num} | {expected}\n"
-            f"💰 {step_display} adımda başarılı\n"
-            f"🔥 Seri: {current_streak}\n\n{mot_msg}"
+            f"✅ Sistem Güncellemesi: Kazandı!\n"
+            f"🤖 Oyun No: {game_range}\n"
+            f"🎉 Durum: Süit Oyuncuya Geldi {expected}\n"
+            f"💰 Kasa Katlama: Başarılı ({step_icon} adımda)\n"
+            f"💬 {random.choice(motivation_messages)}"
         )
         log(f"✅ #{game_num} KAZANÇ — Seri:{current_streak}")
         del pending_signals[game_num]
@@ -516,6 +536,20 @@ async def update_signal_result(bot_client, game_num, won, player_cards):
             info["expected_game"] = next_game
             pending_signals[next_game] = pending_signals.pop(game_num)
             log(f"🔄 #{game_num} -> Katlama {next_step}, Hedef #{next_game}")
+            step_icons = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣"]
+            step_icon = step_icons[next_step] if next_step < len(step_icons) else f"{next_step+1}."
+            katlama_text = (
+                f"🔄 Sistem Güncellemesi: Katlama\n"
+                f"🤖 Yeni Oyun No: #{next_game}\n"
+                f"🎯 Hedef Süit: {expected}  {SUIT_NAMES.get(expected, '')}\n"
+                f"🔁 Kasa Katlama: {step_icon} adım\n"
+                f"💬 {random.choice(motivation_messages)}"
+            )
+            if ANNOUNCE_MODE and msg_id:
+                try:
+                    await bot_client.edit_message(TARGET_CHANNEL, msg_id, katlama_text)
+                except Exception as e:
+                    log_error(f"Katlama mesaj güncellenemedi: {e}")
             return
         else:
             stats["wrong"] += 1
@@ -523,12 +557,12 @@ async def update_signal_result(bot_client, game_num, won, player_cards):
             suit_stats[expected]["wrong"] += 1
             current_streak = current_streak - 1 if current_streak <= 0 else -1
             add_to_history(game_num, expected, False, step)
-            mot_msg = random.choice(motivation_messages)
             new_text = (
-                f"❌ Kaybetti!\n"
-                f"🤖 Oyun No: {game_num} | {expected}\n"
-                f"💸 {max_steps} denemede başarısız\n"
-                f"📉 Seri: {abs(current_streak)} kayıp\n\n{mot_msg}"
+                f"❌ Sistem Güncellemesi: Kayıp\n"
+                f"🤖 Oyun No: {game_range}\n"
+                f"💔 Durum: Süit Gelmedi {expected}\n"
+                f"📉 Kasa Katlama: Başarısız ({max_steps}/{max_steps} adım)\n"
+                f"💬 {random.choice(motivation_messages)}"
             )
             log(f"❌ #{game_num} KAYIP — Seri:{current_streak}")
             del pending_signals[game_num]
@@ -544,26 +578,37 @@ async def update_signal_result(bot_client, game_num, won, player_cards):
 
 # ========================= ANA HANDLER =========================
 async def handle_message(bot_client, event):
+    global last_processed_game, game_count
     msg = event.message
     if not msg or not msg.text:
         return
-    info = extract_game_info(msg.text)
+    info = extract_full_game_info(msg.text)
     if info["game_number"] is None:
         return
     gnum = info["game_number"]
-    target_suit_to_signal = None
-    if info["player_cards"] and info["is_final"]:
-        target_suit_to_signal = update_delays_and_analyze(gnum, info["player_cards"])
-    if info["player_cards"] and gnum in pending_signals:
+
+    # Bekleyen sinyal varsa: hedef oyun geldi mi?
+    if gnum in pending_signals and info["player_cards_str"]:
         expected_suit = pending_signals[gnum]["suit"]
-        extracted_suits = {s for _, s in split_cards(info["player_cards"])}
+        extracted_suits = {s for _, s in split_cards(info["player_cards_str"])}
         won = expected_suit in extracted_suits
         if won or info["is_final"]:
-            await update_signal_result(bot_client, gnum, won, info["player_cards"])
+            await update_signal_result(bot_client, gnum, won, info["all_cards_str"])
+
+    # Yeni sinyal analizi (sadece final mesajlarda, her oyun bir kez)
     if info["is_final"] and not is_signal_active and not bot_paused:
-        if target_suit_to_signal:
-            next_game = get_next_game(gnum)
-            await send_signal(bot_client, next_game, target_suit_to_signal)
+        if gnum != last_processed_game:
+            # Parse başarısızsa (kart okunamadı) last_processed_game güncelleme —
+            # böylece MessageEdited geldiğinde aynı oyun tekrar denenebilir.
+            parsed_ok = bool(info["winner_cards"]) or info["c2_2"] or info["is_tie"]
+            if parsed_ok:
+                last_processed_game = gnum
+            game_count += 1
+            log(f"📊 #{gnum} işlendi (toplam: {game_count})")
+            result = analyze_new_strategy(info)
+            if result:
+                target_game, suit = result
+                await send_signal(bot_client, target_game, suit)
 
 # ========================= RESET ONAY =========================
 reset_confirm = {}
@@ -591,8 +636,9 @@ async def main():
     @client.on(events.NewMessage(pattern=r'^/start$'))
     async def start_cmd(event):
         await event.reply(
-            f"🤖 Dinamik Eşik Bot\n"
-            f"📐 Çarpan: {DYNAMIC_THRESHOLD_MULTIPLIER}x | 🔁 Katlama: {MAX_MARTINGALE_STEPS}\n"
+            f"🤖 Bakara Sinyal Botu\n"
+            f"🃏 Strateji: 3. Kart Renk Sinyali\n"
+            f"🔁 Katlama: {MAX_MARTINGALE_STEPS} adım\n"
             f"📌 /help — Komut listesi"
         )
 
@@ -682,16 +728,16 @@ async def main():
 
     @client.on(events.NewMessage(pattern=r'^/delays$'))
     async def delays_cmd(event):
-        total_delay = sum(suit_delays.values())
-        avg = total_delay / 4.0
-        threshold = avg * DYNAMIC_THRESHOLD_MULTIPLIER
-        lines = [f"📡 Anlık Sayaçlar (Oyun #{game_count})\n{'─'*18}"]
-        for suit, val in sorted(suit_delays.items(), key=lambda x: x[1], reverse=True):
-            bar = "█" * min(val, 10)
-            marker = " ← SİNYAL ADAYI" if val >= threshold and val > 0 else ""
-            lines.append(f"{suit} {val:2d} {bar}{marker}")
-        lines.append(f"{'─'*18}")
-        lines.append(f"📐 Eşik: {threshold:.1f} (ort={avg:.1f}×{DYNAMIC_THRESHOLD_MULTIPLIER})")
+        lines = [f"📡 Bekleyen Sinyaller (Oyun #{game_count})\n{'─'*20}"]
+        if not pending_signals:
+            lines.append("📭 Bekleyen sinyal yok.")
+        else:
+            step_labels = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+            for gn, sig in pending_signals.items():
+                step_lbl = step_labels[sig['step']] if sig['step'] < len(step_labels) else f"{sig['step']}."
+                lines.append(f"{step_lbl} #{gn} → {sig['suit']} (max {sig['max_steps']} adım)")
+        lines.append(f"{'─'*20}")
+        lines.append(f"🔢 Son oyun: #{last_processed_game or '-'} | Toplam: {game_count}")
         await event.reply("\n".join(lines))
 
     @client.on(events.NewMessage(pattern=r'^/history(\s+\d+)?$'))
@@ -752,14 +798,10 @@ async def main():
 
     @client.on(events.NewMessage(pattern=r'^/settings$'))
     async def settings_cmd(event):
-        mode_info = STRATEGY_MODES.get(CURRENT_MODE, STRATEGY_MODES["normal"])
         await event.reply(
             f"⚙️ Mevcut Ayarlar\n{'─'*18}\n"
-            f"🎚️ Mod: {mode_info['label']}\n"
-            f"📐 Eşik Çarpanı: {DYNAMIC_THRESHOLD_MULTIPLIER}x\n"
+            f"🃏 Strateji: 3. Kart Renk Sinyali\n"
             f"🔁 Katlama Adımı: {MAX_MARTINGALE_STEPS}\n"
-            f"📏 Min. Fark: {MIN_GAP}\n"
-            f"⏳ Warmup: {WARMUP_GAMES} oyun\n"
             f"🔔 Seri Bildirimi: {STREAK_NOTIFY}'de bir\n"
             f"🛡️ AutoStop: {'AÇIK (' + str(AUTOSTOP_LIMIT) + ' kayıp)' if AUTOSTOP_ENABLED else 'KAPALI'}\n"
             f"⏱️ Cooldown: {str(SIGNAL_COOLDOWN) + ' dk' if SIGNAL_COOLDOWN else 'KAPALI'}\n"
@@ -912,18 +954,21 @@ async def main():
 
     @client.on(events.NewMessage(pattern=r'^/status$'))
     async def status_cmd(event):
-        total_delay = sum(suit_delays.values())
-        avg = total_delay / 4.0
-        threshold = avg * DYNAMIC_THRESHOLD_MULTIPLIER
         total = stats["total_signals"]
         correct = stats["correct"]
         rate = (correct / total * 100) if total else 0
+        pending_info = ""
+        if pending_signals:
+            for gn, sig in pending_signals.items():
+                pending_info = f"\n🎯 Beklenen: #{gn} → {sig['suit']} ({sig['step']+1}. adım)"
+                break
         await event.reply(
             f"🤖 {'⏸️ Duraklatılmış' if bot_paused else '▶️ Aktif'}\n"
-            f"📡 Sinyal: {'Aktif' if is_signal_active else 'Beklemede'}\n"
-            f"📐 Eşik: {threshold:.2f} (ort={avg:.2f})\n"
-            f"🔢 Oyun: {game_count} | 🔇 {'Sessiz' if not ANNOUNCE_MODE else 'Normal'}\n"
+            f"📡 Sinyal: {'🔴 Aktif' if is_signal_active else '🟢 Beklemede'}\n"
+            f"🔢 İşlenen Oyun: {game_count} | Son: #{last_processed_game or '-'}\n"
+            f"🔁 Katlama: {MAX_MARTINGALE_STEPS} adım | 📣 {'Normal' if ANNOUNCE_MODE else '🔇 Sessiz'}\n"
             f"📊 {total} sinyal | %{rate:.1f} başarı"
+            f"{pending_info}"
         )
 
     # ─── YÖNETİCİ KOMUTLARI (sadece adminler) ───────────────────────────────
@@ -933,11 +978,8 @@ async def main():
     async def admin_help_cmd(event):
         await event.reply(
             "🔐 **Yönetici Komutları:**\n\n"
-            "⚙️ Strateji Ayarları:\n"
-            "/set multiplier <1.0-5.0> — Eşik çarpanı\n"
-            "/set martingale <1-5> — Katlama adımı\n"
-            "/set gap <1-5> — Minimum renk farkı\n"
-            "/set warmup <5-20> — Warmup oyun sayısı\n"
+            "⚙️ Ayarlar:\n"
+            "/set martingale <1-6> — Katlama adımı\n"
             "/set notify <1-10> — Seri bildirim eşiği\n"
             "/set cooldown <0-60> — Sinyal arası bekleme (dk)\n\n"
             "🛡️ Koruma:\n"
@@ -953,17 +995,11 @@ async def main():
             "/force_signal ♣ — Manuel sinyal üret\n"
             "/session_start — Oturum başlat\n"
             "/session_end — Oturum bitir & özet\n\n"
-            "🎚️ Strateji Modu:\n"
-            "/mode — Mevcut modu göster\n"
-            "/mode agresif — Daha fazla sinyal, yüksek risk\n"
-            "/mode normal — Dengeli (varsayılan)\n"
-            "/mode muhafazakar — Az sinyal, yüksek güven\n\n"
             "🔧 Bakım:\n"
             "/pending — Bekleyen sinyallerin detayı\n"
             "/clear_pending — Bekleyenleri temizle\n"
-            "/reset_delays — Sayaçları sıfırla\n"
             "/reset_stats — İstatistik sıfırla\n"
-            "/simulate — Sinyal üretilir mi? test et\n"
+            "/simulate <metin> — Mesaj analizi test et\n"
             "/stats_export — Tam istatistik raporu\n"
             "/backup — JSON dosyalarını gönder\n"
             "/errors — Son hata kayıtları\n"
@@ -1017,56 +1053,17 @@ async def main():
         save_config()
         await event.reply("🔇 Sessiz mod AÇIK — Mesajlar sadece loga yazılıyor.")
 
-    @client.on(events.NewMessage(pattern=r'^/set multiplier (.+)$'))
-    @admin_only
-    async def set_multiplier_cmd(event):
-        global DYNAMIC_THRESHOLD_MULTIPLIER
-        try:
-            new_val = float(event.pattern_match.group(1))
-            if 1.0 <= new_val <= 5.0:
-                DYNAMIC_THRESHOLD_MULTIPLIER = new_val
-                save_config()
-                await event.reply(f"✅ Çarpan {new_val}x olarak ayarlandı.")
-            else:
-                await event.reply("❌ 1.0-5.0 arasında bir değer girin.")
-        except ValueError:
-            await event.reply("❌ Geçersiz değer. Örnek: /set multiplier 2.0")
-
     @client.on(events.NewMessage(pattern=r'^/set martingale (\d+)$'))
     @admin_only
     async def set_martingale_cmd(event):
         global MAX_MARTINGALE_STEPS
         new_val = int(event.pattern_match.group(1))
-        if 1 <= new_val <= 5:
+        if 1 <= new_val <= 6:
             MAX_MARTINGALE_STEPS = new_val
             save_config()
             await event.reply(f"✅ Katlama adımı {new_val} olarak ayarlandı.")
         else:
-            await event.reply("❌ 1-5 arasında bir sayı girin.")
-
-    @client.on(events.NewMessage(pattern=r'^/set gap (\d+)$'))
-    @admin_only
-    async def set_gap_cmd(event):
-        global MIN_GAP
-        new_val = int(event.pattern_match.group(1))
-        if 1 <= new_val <= 5:
-            MIN_GAP = new_val
-            save_config()
-            await event.reply(f"✅ Minimum fark {new_val} olarak ayarlandı.")
-        else:
-            await event.reply("❌ 1-5 arasında bir sayı girin.")
-
-    @client.on(events.NewMessage(pattern=r'^/set warmup (\d+)$'))
-    @admin_only
-    async def set_warmup_cmd(event):
-        global WARMUP_GAMES
-        new_val = int(event.pattern_match.group(1))
-        if 5 <= new_val <= 20:
-            WARMUP_GAMES = new_val
-            save_config()
-            await event.reply(f"✅ Warmup {new_val} oyun olarak ayarlandı.")
-        else:
-            await event.reply("❌ 5-20 arasında bir sayı girin.")
+            await event.reply("❌ 1-6 arasında bir sayı girin.")
 
     @client.on(events.NewMessage(pattern=r'^/set notify (\d+)$'))
     @admin_only
@@ -1114,39 +1111,6 @@ async def main():
             await event.reply("⚠️ Tüm istatistikler sıfırlanacak!\n30 saniye içinde /reset_stats confirm yazın.")
             asyncio.create_task(clear_reset_confirm(user_id))
 
-    @client.on(events.NewMessage(pattern=r'^/mode(\s+\w+)?$'))
-    @admin_only
-    async def mode_cmd(event):
-        global CURRENT_MODE, DYNAMIC_THRESHOLD_MULTIPLIER, MAX_MARTINGALE_STEPS, MIN_GAP, WARMUP_GAMES
-        raw = event.pattern_match.group(1)
-        if not raw:
-            mode_info = STRATEGY_MODES.get(CURRENT_MODE, STRATEGY_MODES["normal"])
-            lines = [f"🎚️ Mevcut Mod: **{mode_info['label']}**\n{'─'*20}"]
-            for key, m in STRATEGY_MODES.items():
-                marker = " ◀ aktif" if key == CURRENT_MODE else ""
-                lines.append(f"{m['label']}{marker}\n  {m['desc']}")
-            lines.append(f"\n📌 Değiştirmek için:\n/mode agresif\n/mode normal\n/mode muhafazakar")
-            await event.reply("\n\n".join(lines))
-            return
-        mode_key = raw.strip().lower()
-        if mode_key not in STRATEGY_MODES:
-            await event.reply("❌ Geçersiz mod. Seçenekler: agresif / normal / muhafazakar")
-            return
-        preset = STRATEGY_MODES[mode_key]
-        CURRENT_MODE = mode_key
-        DYNAMIC_THRESHOLD_MULTIPLIER = preset["dynamic_threshold_multiplier"]
-        MAX_MARTINGALE_STEPS = preset["max_martingale_steps"]
-        MIN_GAP = preset["min_gap"]
-        WARMUP_GAMES = preset["warmup_games"]
-        save_config()
-        await event.reply(
-            f"✅ Mod değiştirildi: **{preset['label']}**\n{'─'*18}\n"
-            f"📐 Çarpan: {DYNAMIC_THRESHOLD_MULTIPLIER}x\n"
-            f"🔁 Katlama: {MAX_MARTINGALE_STEPS}\n"
-            f"📏 Min. Fark: {MIN_GAP}\n"
-            f"⏳ Warmup: {WARMUP_GAMES} oyun\n{'─'*18}\n"
-            f"ℹ️ {preset['desc']}"
-        )
 
     @client.on(events.NewMessage(pattern=r'^/errors(\s+\d+)?$'))
     @admin_only
@@ -1268,40 +1232,41 @@ async def main():
         is_signal_active = False
         await event.reply(f"🧹 {count} bekleyen sinyal temizlendi.")
 
-    @client.on(events.NewMessage(pattern=r'^/reset_delays$'))
-    @admin_only
-    async def reset_delays_cmd(event):
-        global suit_delays, game_count
-        suit_delays = {'♣': 0, '♦': 0, '♥': 0, '♠': 0}
-        game_count = 0
-        await event.reply("🔄 Renk sayaçları ve oyun sayacı sıfırlandı.")
-
-    @client.on(events.NewMessage(pattern=r'^/simulate$'))
+    @client.on(events.NewMessage(pattern=r'^/simulate(.*)$'))
     @admin_only
     async def simulate_cmd(event):
-        total_delay = sum(suit_delays.values())
-        avg = total_delay / 4.0
-        threshold = avg * DYNAMIC_THRESHOLD_MULTIPLIER
-        sorted_delays = sorted(suit_delays.items(), key=lambda x: x[1], reverse=True)
-        best_suit, best_val = sorted_delays[0]
-        second_suit, second_val = sorted_delays[1]
-        gap = best_val - second_val
-
-        eşik_ok = best_val >= threshold
-        gap_ok = gap >= MIN_GAP
-        warmup_ok = game_count > WARMUP_GAMES
-        sinyal = eşik_ok and gap_ok and warmup_ok and not is_signal_active and not bot_paused
-
-        await event.reply(
-            f"🔬 Simülasyon Sonucu\n{'─'*18}\n"
-            f"{'✅' if warmup_ok else '❌'} Warmup: {game_count}/{WARMUP_GAMES}\n"
-            f"{'✅' if eşik_ok else '❌'} Eşik: {best_val} >= {threshold:.1f}\n"
-            f"{'✅' if gap_ok else '❌'} Fark: {gap} >= {MIN_GAP}\n"
-            f"{'✅' if not is_signal_active else '❌'} Sinyal Boş: {not is_signal_active}\n"
-            f"{'✅' if not bot_paused else '❌'} Bot Aktif: {not bot_paused}\n"
-            f"{'─'*18}\n"
-            f"{'🚀 SİNYAL ÜRETİLİR → ' + best_suit if sinyal else '⏸️ SİNYAL ÜRETİLMEZ'}"
-        )
+        raw = event.pattern_match.group(1).strip()
+        if not raw:
+            await event.reply(
+                "🔬 Kullanım: /simulate <mesaj metni>\n"
+                "Örnek: /simulate #N1309 ✅6 (3♣A♥2♥) - 5 (6♠8♥A♠) #C3_3\n\n"
+                "Bot mesajı analiz eder ve sinyal üretilip üretilmeyeceğini gösterir."
+            )
+            return
+        info = extract_full_game_info(raw)
+        if info["game_number"] is None:
+            await event.reply("❌ Geçerli bir oyun numarası bulunamadı (#N...).")
+            return
+        lines = [f"🔬 Analiz: #{info['game_number']}\n{'─'*20}"]
+        lines.append(f"{'✅' if not info['c2_2'] else '❌'} Kural 1 (C2_2): {'Pas' if info['c2_2'] else 'Geçti'}")
+        lines.append(f"{'✅' if not info['is_tie'] else '❌'} Kural 2 (Beraberlik): {'Pas' if info['is_tie'] else 'Geçti'}")
+        initial = info["winner_initial_score"]
+        lines.append(f"{'✅' if (initial is not None and initial > 0) else '❌'} Kural 3 (İlk skor): {initial if initial is not None else '?'}")
+        lines.append(f"{'✅' if info['winner_drew_third'] else '❌'} Kural 4 (3. kart): {'Var' if info['winner_drew_third'] else 'Yok'}")
+        lines.append(f"{'─'*20}")
+        result = analyze_new_strategy(info) if not is_signal_active and not bot_paused else None
+        if info["c2_2"] or info["is_tie"] or not initial or not info["winner_drew_third"]:
+            lines.append("⛔ SİNYAL ÜRETİLMEZ — sistem dışı")
+        elif is_signal_active:
+            lines.append("⚠️ Zaten aktif sinyal var")
+        elif bot_paused:
+            lines.append("⏸️ Bot duraklatılmış")
+        else:
+            tgt = info["game_number"] + (initial or 0)
+            if tgt > MAX_GAME_NUMBER:
+                tgt -= MAX_GAME_NUMBER
+            lines.append(f"🚀 SİNYAL: #{tgt} → {info['winner_third_suit']}")
+        await event.reply("\n".join(lines))
 
     @client.on(events.NewMessage(pattern=r'^/stats_export$'))
     @admin_only
@@ -1332,7 +1297,7 @@ async def main():
             f"🔢 İşlenen Oyun: {game_count}",
             f"{'─'*22}",
             f"⚙️ AYARLAR",
-            f"  Çarpan:{DYNAMIC_THRESHOLD_MULTIPLIER}x | Katlama:{MAX_MARTINGALE_STEPS} | Gap:{MIN_GAP} | Warmup:{WARMUP_GAMES}",
+            f"  Katlama:{MAX_MARTINGALE_STEPS} | Cooldown:{SIGNAL_COOLDOWN}dk | AutoStop:{'AÇIK' if AUTOSTOP_ENABLED else 'KAPALI'}",
         ]
         await event.reply("\n".join(lines))
 
@@ -1387,10 +1352,10 @@ async def main():
     try:
         await client.send_message(
             TARGET_CHANNEL,
-            "🤖 **Bot başlatıldı!**\n"
-            "📐 Dinamik Eşik Stratejisi\n"
-            "🔐 Yönetici komutları korumalı\n"
-            "📌 /help — Komutlar"
+            f"🤖 Sistem Başlatıldı\n"
+            f"🎯 Strateji: 3. Kart Rengi Takibi\n"
+            f"🔁 Kasa Katlama: {MAX_MARTINGALE_STEPS} Adım\n"
+            f"📌 Komutlar için: /help"
         )
     except Exception as e:
         log(f"Başlangıç mesajı gönderilemedi: {e}")
